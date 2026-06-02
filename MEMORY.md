@@ -21,6 +21,18 @@
 
 ## Beslissingen Log
 
+### [2026-06] Gepubliceerd op GitHub + release v0.1.0
+- Repo: github.com/lynuxis2026-pixel/nexus-proxy (PRIVATE, branch main), gepusht via gh.
+- Module-pad hernoemd `github.com/yourusername/nexus` → `github.com/lynuxis2026-pixel/nexus-proxy`
+  (alle imports + go.mod + README/scripts). `.gitignore` gefixt: `dist/` → `/dist/` zodat de
+  embedded UI (`internal/dashboard/dist`) wél mee-commit.
+- `.goreleaser.yml`: owner/repo gezet, Homebrew-blok uitgezet (geen tap). CI `release`-job kreeg
+  `permissions: contents: write`.
+- Tag `v0.1.0` → GitHub Actions: Test (1m24s, `go test -race` groen) + GoReleaser (3m21s) →
+  release met 5 platform-archives + checksums.txt.
+- **Nog te doen voor publiek/viral**: repo public maken (`gh repo edit --visibility public`),
+  dashboard-GIF in README-hero, eventueel Homebrew-tap, en aankondigen (HN/Reddit).
+
 ### [2026-06] Mock weg + in-suite integratietests
 - Externe mock-server (Temp\nexusmock) + test-home + stale bin/ verwijderd. Broncode bevat
   GEEN mock/TODO/placeholder/stub (alleen node_modules/compiled bundle).
