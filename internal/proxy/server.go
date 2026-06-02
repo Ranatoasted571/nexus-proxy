@@ -20,6 +20,8 @@ type Config struct {
 	ConfigPath     string
 	DailyBudgetUSD float64 // overrides config.toml routing.daily_budget_usd when > 0
 	DisableCache   bool    // turn off the response cache
+	SemanticCache  bool    // enable near-match (semantic) response caching
+	SemanticThreshold float64 // cosine threshold for semantic cache (0 ⇒ 0.95)
 }
 
 // Server is the main proxy server

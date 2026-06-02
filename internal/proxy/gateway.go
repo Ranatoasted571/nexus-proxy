@@ -36,11 +36,27 @@ func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) 
 			h.serveCached(w, e, startTime)
 			return
 		}
+		var vec sparseVec
+		hasTools := false
+		if h.cache.semantic {
+			if text, ht, ok := promptText(body); ok {
+				hasTools = ht
+				if !ht {
+					vec = embed(text)
+					if e, ok := h.cache.getSemantic(quickModel(body), vec); ok {
+						h.serveCached(w, e, startTime)
+						return
+					}
+				}
+			}
+		}
 		cw := newCachingWriter(w)
 		defer func() {
 			if cw.cacheable() {
 				e := cw.entry()
 				e.model = quickModel(body)
+				e.vec = vec
+				e.hasTools = hasTools
 				h.cache.set(key, e)
 			}
 		}()

@@ -117,8 +117,10 @@ var (
 	flagAddRegion     string
 	flagAddProject    string
 	flagAddAPIVersion string
-	flagBudget        float64
-	flagNoCache       bool
+	flagBudget            float64
+	flagNoCache           bool
+	flagSemanticCache     bool
+	flagSemanticThreshold float64
 )
 
 func init() {
@@ -129,6 +131,8 @@ func init() {
 	startCmd.Flags().StringVarP(&flagLogLevel, "log", "l", "info", "Log level (debug|info|warn|error)")
 	startCmd.Flags().Float64Var(&flagBudget, "budget", 0, "Daily budget cap in USD (0 = unlimited; free/local only once exceeded)")
 	startCmd.Flags().BoolVar(&flagNoCache, "no-cache", false, "Disable the response cache")
+	startCmd.Flags().BoolVar(&flagSemanticCache, "semantic-cache", false, "Serve near-identical tool-less requests from cache (local embedding match)")
+	startCmd.Flags().Float64Var(&flagSemanticThreshold, "semantic-threshold", 0, "Cosine threshold for the semantic cache (default 0.95)")
 
 	addCmd.Flags().StringVar(&flagAddType, "type", "", "Provider type: openai-compatible | azure | vertex | bedrock")
 	addCmd.Flags().StringVar(&flagAddBaseURL, "base-url", "", "Base URL (custom/azure endpoint; optional for ollama)")
@@ -174,8 +178,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 		Port:           flagProxyPort,
 		DashboardPort:  flagDashboardPort,
 		LogLevel:       flagLogLevel,
-		DailyBudgetUSD: flagBudget,
-		DisableCache:   flagNoCache,
+		DailyBudgetUSD:    flagBudget,
+		DisableCache:      flagNoCache,
+		SemanticCache:     flagSemanticCache,
+		SemanticThreshold: flagSemanticThreshold,
 	}
 
 	proxySrv, err := proxy.New(cfg, db, broker)

@@ -34,7 +34,7 @@ func TestCacheHitOnIdenticalRequest(t *testing.T) {
 	defer srv.Close()
 
 	h := buildTestHandler(t, []testProv{{"p", "free", srv.URL}})
-	h.cache = newResponseCache(time.Minute, 100)
+	h.cache = newResponseCache(time.Minute, 100, false, 0)
 
 	body := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`
 	rec1 := chatCompletions(h, body)

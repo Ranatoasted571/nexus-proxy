@@ -26,8 +26,11 @@ type Dashboard struct {
 }
 
 type Routing struct {
-	Strategy       string  `toml:"strategy"`                  // auto | manual | cheapest | fastest
-	DailyBudgetUSD float64 `toml:"daily_budget_usd,omitempty"` // 0 = unlimited; over budget → free/local only
+	Strategy          string  `toml:"strategy"`                    // auto | manual | cheapest | fastest
+	DailyBudgetUSD    float64 `toml:"daily_budget_usd,omitempty"`  // 0 = unlimited; over budget → free/local only
+	SemanticCache     bool    `toml:"semantic_cache,omitempty"`    // near-match response caching for tool-less requests
+	SemanticThreshold float64 `toml:"semantic_threshold,omitempty"` // cosine threshold (0 ⇒ 0.95)
+	Cascade           bool    `toml:"cascade,omitempty"`           // cheap-first cascade with verification (feature 3)
 }
 
 // Provider is a single configured LLM provider.

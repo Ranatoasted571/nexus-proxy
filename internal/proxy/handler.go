@@ -103,8 +103,16 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 		stopHealth: make(chan struct{}),
 	}
 	if !cfg.DisableCache {
-		h.cache = newResponseCache(5*time.Minute, 500)
+		semantic := cfg.SemanticCache || appCfg.Routing.SemanticCache
+		threshold := cfg.SemanticThreshold
+		if threshold <= 0 {
+			threshold = appCfg.Routing.SemanticThreshold
+		}
+		h.cache = newResponseCache(5*time.Minute, 500, semantic, threshold)
 		log.Info().Msg("Response cache enabled (5m TTL) — identical requests served instantly & free")
+		if semantic {
+			log.Info().Float64("threshold", h.cache.threshold).Msg("Semantic cache enabled — near-identical tool-less requests served from cache")
+		}
 	}
 
 	if len(active) == 0 {
@@ -180,11 +188,27 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 			h.serveCached(w, e, startTime)
 			return
 		}
+		var vec sparseVec
+		hasTools := false
+		if h.cache.semantic {
+			if text, ht, ok := promptText(body); ok {
+				hasTools = ht
+				if !ht {
+					vec = embed(text)
+					if e, ok := h.cache.getSemantic(quickModel(body), vec); ok {
+						h.serveCached(w, e, startTime)
+						return
+					}
+				}
+			}
+		}
 		cw := newCachingWriter(w)
 		defer func() {
 			if cw.cacheable() {
 				e := cw.entry()
 				e.model = quickModel(body)
+				e.vec = vec
+				e.hasTools = hasTools
 				h.cache.set(key, e)
 			}
 		}()

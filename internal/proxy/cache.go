@@ -12,30 +12,67 @@ import (
 
 // cacheEntry is a cached upstream response plus the metadata needed to log a hit.
 type cacheEntry struct {
-	status  int
-	ctype   string
-	body    []byte
-	model   string
-	in, out int
-	expires time.Time
+	status   int
+	ctype    string
+	body     []byte
+	model    string
+	in, out  int
+	vec      sparseVec // semantic fingerprint (only set when semantic cache is on)
+	hasTools bool      // requests with tools are never served as a semantic match
+	expires  time.Time
 }
 
 // responseCache is an in-memory, TTL + FIFO-capped response cache. Identical
 // requests are served instantly and for free. It only caches successful (200)
 // responses and keys on a normalized hash of the request body, so stream vs
 // non-stream and different models never collide.
+//
+// With semantic mode enabled, a miss on the exact key falls back to a cosine
+// similarity search over recent tool-less entries of the same model, so
+// near-identical prompts are also served from cache.
 type responseCache struct {
-	mu     sync.Mutex
-	ttl    time.Duration
-	max    int
-	m      map[string]cacheEntry
-	order  []string
-	Hits   int64
-	Misses int64
+	mu        sync.Mutex
+	ttl       time.Duration
+	max       int
+	m         map[string]cacheEntry
+	order     []string
+	semantic  bool
+	threshold float64
+	Hits      int64
+	Misses    int64
 }
 
-func newResponseCache(ttl time.Duration, max int) *responseCache {
-	return &responseCache{ttl: ttl, max: max, m: make(map[string]cacheEntry)}
+func newResponseCache(ttl time.Duration, max int, semantic bool, threshold float64) *responseCache {
+	if threshold <= 0 {
+		threshold = 0.95
+	}
+	return &responseCache{ttl: ttl, max: max, m: make(map[string]cacheEntry), semantic: semantic, threshold: threshold}
+}
+
+// getSemantic returns the best near-match for vec among non-tool entries of the
+// same model whose cosine similarity meets the threshold.
+func (c *responseCache) getSemantic(model string, vec sparseVec) (cacheEntry, bool) {
+	if c == nil || !c.semantic || len(vec) == 0 {
+		return cacheEntry{}, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	best := c.threshold
+	var hit cacheEntry
+	found := false
+	for _, e := range c.m {
+		if e.hasTools || e.model != model || len(e.vec) == 0 || now.After(e.expires) {
+			continue
+		}
+		if s := cosine(vec, e.vec); s >= best {
+			best, hit, found = s, e, true
+		}
+	}
+	if found {
+		c.Hits++
+	}
+	return hit, found
 }
 
 func (c *responseCache) get(key string) (cacheEntry, bool) {
@@ -74,17 +111,45 @@ func (c *responseCache) set(key string, e cacheEntry) {
 }
 
 // cacheKey normalizes the request body to canonical JSON before hashing, so
-// whitespace / key-order differences still hit the same entry.
+// whitespace / key-order differences — and volatile, response-irrelevant fields
+// like metadata and cache_control markers — still hit the same entry.
 func cacheKey(prefix string, body []byte) string {
 	norm := body
 	var v interface{}
 	if json.Unmarshal(body, &v) == nil {
+		stripVolatile(v)
 		if b, err := json.Marshal(v); err == nil {
 			norm = b
 		}
 	}
 	sum := sha256.Sum256(norm)
 	return prefix + ":" + hex.EncodeToString(sum[:])
+}
+
+// stripVolatile removes fields that never change the model's output, so requests
+// that differ only in billing/telemetry metadata share a cache entry:
+//   - top-level "metadata" / "request_id"
+//   - "cache_control" markers anywhere (they affect provider billing, not output)
+func stripVolatile(v interface{}) {
+	if m, ok := v.(map[string]interface{}); ok {
+		delete(m, "metadata")
+		delete(m, "request_id")
+	}
+	stripCacheControl(v)
+}
+
+func stripCacheControl(v interface{}) {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		delete(t, "cache_control")
+		for _, val := range t {
+			stripCacheControl(val)
+		}
+	case []interface{}:
+		for _, val := range t {
+			stripCacheControl(val)
+		}
+	}
 }
 
 func quickModel(body []byte) string {
