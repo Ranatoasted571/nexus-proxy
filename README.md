@@ -595,6 +595,43 @@ keep building. Full guide: **[docs/MOBILE.md](docs/MOBILE.md)**.
 
 ---
 
+## FAQ
+
+**Isn't this just claude-code-router / OpenRouter?**
+Routing to cheaper models is the commodity part — yes, NEXUS does it. The
+difference is everything around it: a **privacy firewall** that masks secrets/PII
+before they leave your machine, **`nexus bench`** that proves which cheap model is
+good enough on *your own* traffic, **adaptive routing** that learns *your* best
+provider per task, and a **local single binary** with no cloud and no token markup.
+
+**Is my code/data safe?**
+NEXUS runs entirely on your machine. The only thing that leaves is the LLM call to
+the provider *you* configured — and with `--redact` on, detected secrets/PII are
+masked before that call and restored in the response. No telemetry, no cloud, your
+keys stay in your local config/env. Want zero egress? Route to Ollama and stay
+fully offline.
+
+**Won't cheap models produce worse code?**
+That's the point of the **cheap-first cascade**: it tries the cheap model, verifies
+the output (valid tool-call JSON / non-empty), and **escalates to Claude on
+failure**. Complex/critical tasks start premium. And `nexus bench` lets you measure
+agreement on your real prompts before trusting a model.
+
+**Does it work with Cursor / aider / Cline?**
+Yes. NEXUS speaks **both** the Anthropic (`/v1/messages`) and OpenAI
+(`/v1/chat/completions`) APIs, so any of them route through it with one env var.
+
+**Do you take a cut or see my keys?**
+No markup, no cloud, no account. Your provider keys live in `~/.nexus/config.toml`
+(or `env:` refs) on your machine.
+
+**How does it decide where to route?**
+It classifies each request's complexity → tier, with optional cheap-first cascade
+and adaptive learning. You can override per request (`X-Nexus-Tier` /
+`X-Nexus-Provider` headers) or declaratively (`[[rules]]` in config).
+
+---
+
 ## Contributing
 
 PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
