@@ -1,6 +1,6 @@
 # NEXUS
 
-![NEXUS — smart proxy for Claude Code and every AI coding tool](docs/hero.svg)
+![NEXUS live dashboard — routing requests to the cheapest model in real time](docs/dashboard.gif)
 
 **Smart proxy + live dashboard for Claude Code — and every AI coding tool.**  
 Route Claude Code, Cursor, aider, and any OpenAI/Anthropic app to the cheapest capable LLM — automatically.
@@ -15,9 +15,6 @@ Route Claude Code, Cursor, aider, and any OpenAI/Anthropic app to the cheapest c
 curl -fsSL https://raw.githubusercontent.com/lynuxis2026-pixel/nexus-proxy/main/install.sh | sh
 nexus start
 ```
-
-> A dashboard GIF makes the best hero — record `http://localhost:2222`, save it as
-> `docs/dashboard.gif`, and swap the banner above for it.
 
 > **NEXUS is running**  
 > Proxy: http://localhost:3000  
