@@ -128,6 +128,12 @@ func (h *Handler) Close() error {
 	return nil
 }
 
+// ProviderCount returns the number of configured providers.
+func (h *Handler) ProviderCount() int { return len(h.providers) }
+
+// CacheEnabled reports whether the response cache is active.
+func (h *Handler) CacheEnabled() bool { return h.cache != nil }
+
 // healthLoop periodically health-checks every provider and updates the router,
 // so unhealthy providers are skipped (and recover automatically).
 func (h *Handler) healthLoop() {

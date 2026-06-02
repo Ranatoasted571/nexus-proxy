@@ -32,10 +32,21 @@ func NewServer(port int, broker *SSEBroker, db *storage.DB) *Server {
 
 // Start starts the dashboard HTTP server.
 func (s *Server) Start() error {
+	s.srv = &http.Server{
+		Addr:    fmt.Sprintf(":%d", s.port),
+		Handler: s.Routes(),
+	}
+	return s.srv.ListenAndServe()
+}
+
+// Routes builds the dashboard HTTP handler (router + CORS). Exposed for tests.
+func (s *Server) Routes() http.Handler {
 	r := mux.NewRouter()
 
 	// SSE endpoint — live updates.
-	r.Handle("/events", s.broker).Methods("GET")
+	if s.broker != nil {
+		r.Handle("/events", s.broker).Methods("GET")
+	}
 
 	// API endpoints.
 	api := r.PathPrefix("/api").Subrouter()
@@ -54,12 +65,7 @@ func (s *Server) Start() error {
 		r.PathPrefix("/").HandlerFunc(s.handleSPAFallback)
 	}
 
-	handler := corsMiddleware(r)
-	s.srv = &http.Server{
-		Addr:    fmt.Sprintf(":%d", s.port),
-		Handler: handler,
-	}
-	return s.srv.ListenAndServe()
+	return corsMiddleware(r)
 }
 
 // Shutdown gracefully stops the dashboard server.

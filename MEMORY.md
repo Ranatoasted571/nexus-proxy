@@ -21,6 +21,18 @@
 
 ## Beslissingen Log
 
+### [2026-06] Harding + elke route getest (→ v0.2.1)
+- **Hardening**: `proxy.Server.Shutdown` nil-veilig (geen panic als nooit Start); rijkere
+  `/health` (`{status,service,providers,cache}`); `/events` alleen geregistreerd als broker != nil;
+  `Server.Routes()` accessor op proxy én dashboard voor end-to-end route-tests.
+- **Elke route getest (in-suite)**: `routes_test.go` bouwt de échte proxy.Server met een temp-config
+  die naar een in-proces mock wijst en raakt /health, /v1/models, /v1/messages (anthropic→openai-provider
+  →terug), /v1/chat/completions, 404 en wrong-method. Dashboard `Routes()`-test dekt / (SPA) + alle /api/*.
+- **Live geverifieerd op de binary** (zero-config): proxy /health(200, providers:0,cache:true),
+  /v1/models(200), /v1/chat/completions(502), /nope(404); dashboard / + alle 8 /api/* (200) + /events
+  (SSE connected+heartbeat) + card.svg (image/svg+xml).
+- Coverage: proxy 62%, dashboard 55%, config 71%, storage 60%, router 59%, providers 40%. ~60 tests groen.
+
 ### [2026-06] Drie wereld-impact features: gateway, cache, savings (→ v0.2.0)
 - **Universele gateway** (`gateway.go`): OpenAI-compatibel `POST /v1/chat/completions` + `GET /v1/models`
   inbound. Hergebruikt classifier/router/providers. OpenAI-provider = high-fidelity passthrough

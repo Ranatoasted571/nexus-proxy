@@ -11,6 +11,35 @@ import (
 	"github.com/lynuxis2026-pixel/nexus-proxy/internal/storage"
 )
 
+func TestRoutes_Dashboard(t *testing.T) {
+	db, err := storage.New(filepath.Join(t.TempDir(), "r.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s := &Server{db: db, broker: NewSSEBroker()}
+	h := s.Routes()
+
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		return rec
+	}
+
+	// SPA index from the embedded dashboard.
+	if rec := get("/"); rec.Code != 200 || !strings.Contains(rec.Body.String(), "<html") {
+		t.Errorf("/ (SPA) = %d", rec.Code)
+	}
+	for _, p := range []string{"/api/stats", "/api/requests", "/api/providers", "/api/timeseries", "/api/breakdown", "/api/savings"} {
+		if rec := get(p); rec.Code != 200 {
+			t.Errorf("%s = %d", p, rec.Code)
+		}
+	}
+	if rec := get("/api/savings/card.svg"); rec.Code != 200 || rec.Header().Get("Content-Type") != "image/svg+xml" {
+		t.Errorf("/api/savings/card.svg = %d %q", rec.Code, rec.Header().Get("Content-Type"))
+	}
+}
+
 func TestDashboardSavings(t *testing.T) {
 	db, err := storage.New(filepath.Join(t.TempDir(), "s.db"))
 	if err != nil {

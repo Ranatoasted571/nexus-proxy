@@ -48,6 +48,9 @@ func New(cfg *Config, db *storage.DB, broker EventPublisher) (*Server, error) {
 	return s, nil
 }
 
+// Routes returns the proxy's HTTP handler. Exposed for end-to-end route tests.
+func (s *Server) Routes() http.Handler { return s.router }
+
 // registerRoutes sets up all proxy routes
 func (s *Server) registerRoutes() {
 	// Main Anthropic API endpoint — Claude Code uses this
@@ -94,9 +97,12 @@ func (s *Server) Start(ctx context.Context) error {
 // Shutdown gracefully shuts down the server and stops handler background work.
 // The shared DB is owned and closed by the caller (main), not here.
 func (s *Server) Shutdown() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	err := s.srv.Shutdown(ctx)
+	var err error
+	if s.srv != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err = s.srv.Shutdown(ctx)
+	}
 	if s.handler != nil {
 		_ = s.handler.Close()
 	}
@@ -107,7 +113,8 @@ func (s *Server) Shutdown() error {
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok","service":"nexus"}`))
+	fmt.Fprintf(w, `{"status":"ok","service":"nexus","providers":%d,"cache":%t}`,
+		s.handler.ProviderCount(), s.handler.CacheEnabled())
 }
 
 // handleUnknown logs and rejects unknown routes
