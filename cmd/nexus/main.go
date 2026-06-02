@@ -104,6 +104,13 @@ var doctorCmd = &cobra.Command{
 	RunE:  runDoctor,
 }
 
+// top command — live terminal dashboard (htop for your LLM traffic)
+var topCmd = &cobra.Command{
+	Use:   "top",
+	Short: "Live terminal dashboard for your NEXUS traffic",
+	RunE:  runTop,
+}
+
 // version command
 var versionCmd = &cobra.Command{
 	Use:   "version",
@@ -131,6 +138,8 @@ var (
 	flagSemanticThreshold float64
 	flagCascade           bool
 	flagRedact            bool
+	flagTopPort           int
+	flagTopOnce           bool
 )
 
 func init() {
@@ -146,6 +155,9 @@ func init() {
 	startCmd.Flags().BoolVar(&flagCascade, "cascade", false, "Cheap-first cascade: try the cheapest capable model, verify, escalate on failure")
 	startCmd.Flags().BoolVar(&flagRedact, "redact", false, "Privacy firewall: mask secrets/API keys/PII before forwarding to any provider")
 
+	topCmd.Flags().IntVar(&flagTopPort, "ui", 2222, "Dashboard port to read from")
+	topCmd.Flags().BoolVar(&flagTopOnce, "once", false, "Render a single frame and exit (for scripts/CI)")
+
 	addCmd.Flags().StringVar(&flagAddType, "type", "", "Provider type: openai-compatible | azure | vertex | bedrock")
 	addCmd.Flags().StringVar(&flagAddBaseURL, "base-url", "", "Base URL (custom/azure endpoint; optional for ollama)")
 	addCmd.Flags().StringVar(&flagAddRegion, "region", "", "Region (AWS Bedrock / Google Vertex)")
@@ -160,6 +172,7 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(modelsCmd)
 	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(topCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 
