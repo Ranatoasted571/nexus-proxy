@@ -175,6 +175,7 @@ func init() {
 	rootCmd.AddCommand(modelsCmd)
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(topCmd)
+	rootCmd.AddCommand(mcpCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 

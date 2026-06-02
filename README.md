@@ -191,6 +191,7 @@ nexus start              # start proxy + dashboard
 nexus add <provider> <key>  # add a provider (key can be "k1,k2,k3" for a pool)
 nexus doctor             # diagnose setup, test every provider, suggest fixes
 nexus top                # live terminal dashboard (htop for your LLM traffic)
+nexus mcp                # run as an MCP server (Claude Code can query your usage)
 nexus status             # provider health check
 nexus models             # show Claude→provider model mapping
 nexus logs               # recent requests
@@ -386,6 +387,17 @@ nexus top                # reads the dashboard API; --once for a single frame
 
 A live, dependency-free terminal dashboard — requests, cost, cache savings,
 providers and a color-coded request feed — for when you don't want a browser.
+
+### 🧩 MCP server
+
+```bash
+claude mcp add nexus -- nexus mcp     # then ask Claude: "how much did I save today?"
+```
+
+NEXUS speaks the **Model Context Protocol** over stdio, exposing tools
+(`nexus_stats`, `nexus_savings`, `nexus_recent`, `nexus_providers`,
+`nexus_cost_breakdown`) so Claude Code — or any MCP client — can read your usage
+and savings directly in chat.
 
 ---
 
