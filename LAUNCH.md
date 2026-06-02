@@ -1,144 +1,177 @@
 # 🚀 NEXUS Launch Playbook
 
-Everything you need to reach the world. Copy-paste ready. Post in **your** voice —
-keep it honest, answer every comment fast, and lead with the problem, not the hype.
+Copy-paste ready. Post in **your** voice — honest, problem-first, reply fast.
 
 Repo: https://github.com/lynuxis2026-pixel/nexus-proxy
 
+> **Positioning (read this first).** "Route Claude Code to cheaper models" is a
+> commodity — a 34k-star repo and OpenRouter already own that headline. Do **not**
+> lead with "save money." Lead with the quadrant nobody else occupies:
+> **Private · Proven · Self-learning · Local.** Cost is the *benefit*, not the pitch.
+>
+> The one-liner that survives every comparison:
+> *"OpenRouter routes to the cheapest provider. NotDiamond predicts from the crowd.
+> NEXUS learns which provider wins **your** tasks, verifies the cheap answer before
+> trusting it, redacts secrets before they leave your machine, and proves it by
+> benchmarking every provider on **your own** traffic — one local binary, no markup."*
+
 ---
 
-## 0. Pre-launch checklist (do this first)
+## 0. Pre-launch checklist
 
-- [ ] Repo is **public** ✅ (done)
-- [ ] `v0.2.0` release with binaries ✅ (done)
-- [ ] Record a **dashboard GIF** (`http://localhost:2222`) → `docs/dashboard.gif`, set it as the README hero. *This is the single biggest conversion lever.*
-- [ ] Upload a **social preview image** (Repo → Settings → Social preview, 1280×640 PNG — export `docs/hero.svg`). Makes shared links look pro on X/Slack/Discord.
-- [ ] Add a repo **description + website** (Settings) — already topiced.
-- [ ] Do a real `curl | sh` install on a clean machine to confirm the one-liner works.
-- [ ] Pin a "Show HN is live → [link]" note in the README the morning of launch.
+- [ ] Repo **public** ✅ · `v0.4.0` release with binaries ✅
+- [ ] Hero **GIF** set in README ✅ (the single biggest conversion lever)
+- [ ] **Social preview** image (Settings → Social preview, 1280×640 — export `docs/hero.svg`)
+- [ ] Clean-machine `curl | sh` smoke test of the one-liner
+- [ ] Have a real **`nexus report`** screenshot ready ("$ saved + N secrets masked · 0 leaked") and a **`nexus bench`** Report Card screenshot — these are the proof shots
+- [ ] Be at your desk the first 2 hours to reply
 
-**Timing:** Hacker News is best **Tue–Thu, ~8–10am US Eastern**. Post to one channel,
-then seed the others over the day. Be at your desk for the first 2 hours to reply.
+**Timing:** HN is best **Tue–Thu, ~8–10am US Eastern**. Post one channel, seed the rest over the day.
 
 ---
 
 ## 1. Hacker News (Show HN)
 
-**Title** (≤80 chars, no emoji on HN):
+**Title** (≤80 chars, no emoji):
 ```
-Show HN: NEXUS – route Claude Code, Cursor and aider to the cheapest LLM
+Show HN: NEXUS – cut AI coding cost without your code leaving your machine
 ```
 
 **URL:** `https://github.com/lynuxis2026-pixel/nexus-proxy`
 
-**First comment** (post immediately after submitting):
+**First comment** (post immediately):
 ```
-I kept watching my Claude/OpenAI credits vanish on tasks that a free model could
-have handled, so I built NEXUS: a single-binary local proxy that sits between your
-AI coding tool and the providers, classifies each request, and routes it to the
-cheapest model that can actually handle it. Simple stuff stays free (Groq, Gemini,
-Cerebras…), real work goes to DeepSeek/Mistral/etc., and architecture/security
-prompts still go to Claude or GPT.
+Routing Claude Code to cheaper models is a solved/commodity thing now (a 34k-star
+proxy and OpenRouter both do it). The parts that bugged me weren't solved, so I
+built NEXUS around them — it's a single local Go binary that sits between your AI
+coding tool and the providers:
 
-Two things I wanted that didn't exist together:
-- It speaks BOTH the Anthropic API (/v1/messages) and the OpenAI API
-  (/v1/chat/completions), so the same proxy works with Claude Code, Cursor, aider,
-  Continue, Cline — one env var.
-- A live dashboard that shows every request, which model handled it, latency and
-  cost in real time, plus a running "vs. Claude" savings number.
+1. Privacy. It masks API keys, secrets, private keys and PII *before* a request
+   ever leaves your machine, and restores them in the response — so you can use a
+   cheap third-party model on a codebase you're under NDA about. Cloud routers
+   structurally can't offer this; the request leaves their way.
 
-It's one Go binary (no Python, no Docker), pure-Go SQLite, 24 providers built in
-plus any OpenAI-compatible endpoint, a normalized response cache, automatic
-failover on rate-limits, and an optional daily budget cap. MIT licensed.
+2. Proof, not vibes. `nexus bench` replays your *own* recent requests against every
+   provider and prints cost × latency × agreement (how close each model's output is
+   to your original), then recommends the cheapest one that stays close. You pick a
+   model by measuring on your real traffic, not from a generic leaderboard.
 
-Honest caveats: routing heuristics are simple (token count + keywords + the model
-Claude Code picked) and I'd love smarter classification ideas. Bedrock/Vertex are
-implemented but I've only tested them against the documented APIs + a SigV4 vector,
-not a paid account. Feedback very welcome.
+3. It learns *your* routing. A cheap-first cascade tries the cheapest capable model,
+   verifies the output (valid tool-call JSON / non-empty), and escalates only on
+   failure — and it learns which provider wins which task type from those outcomes.
+   Not the crowd's preferences; yours.
+
+Plus the table stakes: speaks both the Anthropic and OpenAI APIs (Claude Code,
+Cursor, aider, Cline — one env var), 24 providers + any OpenAI-compatible endpoint,
+semantic cache, failover, budget caps, a live local dashboard, and a `nexus report`
+that prints "$X saved · N secrets masked before leaving your machine · 0 leaked."
+
+One Go binary, pure-Go SQLite, no cloud, no token markup, MIT. `nexus code` starts
+it and launches Claude Code through it in one command.
+
+Honest caveats: the bench "agreement" score is a cheap local word-overlap proxy for
+quality, not an LLM judge — directionally useful, not gospel. Adaptive routing
+learns within a run (in-memory). The privacy firewall uses high-confidence detectors
+(key prefixes, JWTs, private keys, KEY=secret, emails) — it won't catch every secret
+shape, so it's defense-in-depth, not a guarantee. Feedback very welcome.
 ```
 
-**HN do's:** reply to everything, concede valid criticism, never argue. Don't ask for upvotes anywhere (instant flag).
+**HN do's:** reply to everything, concede valid criticism, never argue, never ask for upvotes.
 
 ---
 
 ## 2. Reddit
 
-### r/LocalLLaMA  (most likely to love this)
+### r/LocalLLaMA
 **Title:**
 ```
-I built a single-binary proxy that routes Claude Code / Cursor / aider to the cheapest model (free tiers first), with a live cost dashboard — open source
+I built a local single-binary proxy for Claude Code/Cursor that redacts your secrets before they hit a cloud model, benchmarks providers on YOUR traffic, and learns your routing — open source
 ```
 **Body:**
 ```
-NEXUS is a local proxy for AI coding tools. It classifies each request and sends
-the simple ones to free providers (Groq, Gemini, Cerebras, SambaNova, NVIDIA NIM,
-or your local Ollama) and only escalates the hard stuff to paid models.
+NEXUS is a local proxy for AI coding tools. The cheap-routing part is table stakes;
+what I actually wanted:
 
-- One Go binary, no Docker, pure-Go SQLite.
-- Speaks the Anthropic AND OpenAI APIs, so it works with Claude Code, Cursor,
-  aider, Continue, Cline, or any OpenAI SDK app — one env var.
-- 24 providers built in + any OpenAI-compatible endpoint (vLLM, LM Studio, LiteLLM…).
-- Live dashboard with per-request cost, smart cache, auto-failover, budget cap.
+- Privacy firewall: secrets/API keys/PII are masked before any request leaves the
+  machine and restored in the response. Use DeepSeek/Groq on NDA'd code safely.
+- `nexus bench`: replays your real captured requests across every provider and
+  ranks them by cost × latency × agreement on YOUR work — not a generic benchmark.
+- Cheap-first cascade with verification + adaptive routing that learns which
+  provider wins your task types.
+- One Go binary, pure-Go SQLite, no Docker, no cloud, no token markup. 24 providers
+  + any OpenAI-compatible endpoint. Works with Claude Code, Cursor, aider, Cline via
+  one env var (speaks both Anthropic + OpenAI APIs).
 
-MIT, install is one curl command. Repo + binaries: <link>
+MIT, one curl to install. Repo + binaries: <link>
 
-Would love feedback on the routing heuristics and which providers to add next.
+Feedback wanted on the routing + the agreement metric.
 ```
 
 ### r/ClaudeAI
 **Title:**
 ```
-NEXUS: keep using Claude Code, but auto-route the cheap requests to free models (open-source proxy + live cost dashboard)
+Use Claude Code, route the cheap requests to free models — but mask your secrets first and prove the cheap model is good enough (open-source, local)
 ```
-**Body:** (lead with the Claude Code angle)
+**Body:**
 ```
-Claude Code is my daily driver but the API bill adds up. NEXUS is a tiny local
-proxy — point Claude Code at it with one env var (ANTHROPIC_BASE_URL) and it routes
-simple requests to free/cheap models while keeping Claude for architecture, debugging
-and anything you mark urgent. There's a live dashboard showing exactly what went
-where and what you saved. Single binary, MIT. <link>
+Claude Code is my daily driver. NEXUS is a tiny local proxy (one env var:
+ANTHROPIC_BASE_URL) that routes simple requests to free/cheap models and keeps
+Claude for the hard stuff — but two things make it different from the other
+"cheaper Claude Code" proxies:
+
+1) it redacts secrets/PII before anything leaves your machine, and
+2) `nexus bench` proves which cheap model is actually good enough on YOUR real
+   prompts before you trust it.
+
+Live local dashboard + a `nexus report` that shows what you saved AND that nothing
+leaked. Single Go binary, MIT. <link>
 ```
 
 ### r/selfhosted
 **Title:**
 ```
-NEXUS – self-hosted LLM gateway for coding tools: one binary, 24 providers, live dashboard, cost cap
+NEXUS – self-hosted, single-binary AI-coding proxy: privacy firewall + cost routing + benchmark-on-your-traffic, no cloud
 ```
 
-**Reddit etiquette:** be present in comments, no cross-post spam, follow each sub's self-promo rules (some require a flair or a ratio of contributions).
+**Reddit etiquette:** be present in comments, follow each sub's self-promo rules.
 
 ---
 
 ## 3. X / Twitter (thread)
 
 ```
-1/ I got tired of watching Claude Code credits disappear on trivial tasks.
+1/ "Route Claude Code to a cheaper model" is a solved problem now.
 
-So I built NEXUS: a single-binary proxy that routes Claude Code, Cursor & aider to
-the cheapest model that can handle each request — with a live cost dashboard.
+The unsolved parts: doing it without leaking your code, and knowing the cheap model
+is actually good enough.
 
-Open source, MIT 👇 github.com/lynuxis2026-pixel/nexus-proxy
+So I built NEXUS — a local, open-source binary that does both 👇
+github.com/lynuxis2026-pixel/nexus-proxy
 
-2/ It classifies every request: a quick question goes to a free model (Groq,
-Gemini, Cerebras…), a refactor goes to DeepSeek, and real architecture work still
-goes to Claude or GPT. You keep the quality where it matters.
+2/ 🔒 Privacy firewall. It masks API keys, secrets and PII *before* a request ever
+leaves your machine, then restores them in the response. You can point a cheap
+third-party model at NDA'd code. A cloud router can't make that promise.
 
-3/ One proxy, every tool. It speaks BOTH the Anthropic and OpenAI APIs, so Claude
-Code, Cursor, aider, Continue and Cline all work through it with a single env var.
+3/ 🧪 Proof, not vibes. `nexus bench` replays YOUR real requests across every
+provider and ranks them by cost × latency × agreement on your own work — then tells
+you the cheapest one that stays close. Stop guessing which model is "good enough."
 
-4/ 24 providers built in + any OpenAI-compatible endpoint. Smart cache (identical
-requests are instant & free), auto-failover when a free tier rate-limits, and a
-daily budget cap.
+4/ 🧠 It learns your routing. Cheap-first: try the cheapest model, verify the
+output, escalate only on failure — and learn which provider wins which of YOUR task
+types over time. Not the crowd's preference. Yours.
 
-5/ One Go binary. No Python, no Docker. `curl | sh` and you're running, with a
-dashboard at localhost:2222 that you'll actually want to screenshot.
+5/ 📦 One Go binary. No Python, no Docker, no cloud, no token markup. `nexus code`
+starts it and launches Claude Code through it in one command. Works with Cursor,
+aider, Cline too (speaks both Anthropic + OpenAI APIs).
 
-6/ It's free and MIT licensed. Stars + feedback make my week:
+6/ And `nexus report` gives you one shareable line:
+"$X saved · N secrets masked before leaving your machine · 0 leaked."
+
+Free, MIT, stars + feedback make my week 🙏
 github.com/lynuxis2026-pixel/nexus-proxy
 ```
 
-Attach the dashboard GIF/screenshot to tweet 1 or 5 — visual tweets travel far.
-The dashboard's **Share** button auto-fills a savings tweet for users too.
+Attach the **dashboard GIF** to tweet 1 and a **`nexus report`/`bench` screenshot** to tweet 3 or 6.
 
 ---
 
@@ -147,33 +180,36 @@ The dashboard's **Share** button auto-fills a savings tweet for users too.
 **Name:** NEXUS
 **Tagline (≤60 chars):**
 ```
-Route every AI coding tool to the cheapest capable LLM
+Private, proven cost-routing for Claude Code — local
 ```
 **Description:**
 ```
-NEXUS is an open-source, single-binary proxy + live dashboard for AI coding tools.
-Point Claude Code, Cursor, aider or any OpenAI/Anthropic app at it and it routes
-each request to the cheapest model that can handle it — free tiers first, Claude
-for the hard stuff. 24 providers built in, smart cache, auto-failover, budget cap,
-and a real-time cost dashboard. No Python, no Docker. MIT.
+NEXUS is an open-source, single-binary local proxy for AI coding tools. It routes
+Claude Code, Cursor or aider to the cheapest capable model — but unlike cloud
+routers it masks your secrets/PII before anything leaves your machine, proves which
+cheap model is good enough by benchmarking every provider on YOUR real traffic
+(nexus bench), and learns your best routing from real outcomes. Live local
+dashboard, semantic cache, budget caps, MCP server. No Python, no Docker, no cloud,
+no token markup. MIT.
 ```
-**First comment:** same problem-first story as the HN comment, shortened.
+**First comment:** the problem-first HN story, shortened.
 
 ---
 
-## 5. LinkedIn / Dev.to / blog (optional, longer form)
+## 5. Longer form (LinkedIn / Dev.to / blog)
 
-Angle: *"Why I built an LLM router for coding agents"* — the cost problem, the
-classify-then-route idea, the single-binary/dashboard design choices, and what you
-learned. Link the repo. Cross-post to Dev.to and Hashnode for SEO.
+Angle: *"Cheaper Claude Code is a commodity. I built the layer above it."* — the
+privacy problem (NDA'd code + cloud models), benchmark-on-your-own-traffic, and the
+local-first/single-binary design (a nod to why "no cloud, no supply-chain surface"
+matters in 2026). Link the repo; cross-post to Dev.to + Hashnode.
 
 ---
 
 ## 6. After you post
 
-- Reply to **every** comment in the first few hours — engagement drives ranking.
+- Reply to **every** comment in the first hours — engagement drives ranking.
 - Turn the best questions into README FAQ entries.
-- Watch GitHub stars/issues; thank early contributors; label `good first issue`.
-- A week later: post a "what I learned launching" follow-up with the numbers.
+- The two screenshots that convert: the **dashboard GIF** and a real **`nexus report`** ("0 leaked").
+- A week later: a "what I learned launching" follow-up with real numbers.
 
-Good luck — go get seen. 🌍
+Go get seen. 🌍
