@@ -47,17 +47,20 @@ the four things no one else does in one local tool:
 - **🧠 Self-learning** — adaptive routing learns which provider wins *your* task types from real outcomes — not the crowd's generic preferences.
 - **📦 Local** — one signed Go binary, pure-Go SQLite. No Python, no Docker, no Postgres, no cloud, no token markup, no supply-chain surface.
 
-…and yes, it cuts the bill:
+…and yes, it cuts the bill — and the savings **compound**: free tiers handle the
+simple majority ($0), the cache makes repeats free, off-peak halves the standard
+tier, and the cascade keeps premium calls rare.
 
 | Task | Without NEXUS | With NEXUS |
 |------|--------------|------------|
 | Quick question | Claude Haiku $0.0012 | Groq Llama **$0.00** |
-| Code refactor | Claude Sonnet $0.08 | DeepSeek **$0.002** |
+| Code refactor | Claude Sonnet $0.08 | DeepSeek (off-peak) **$0.001** |
 | Architecture | Claude Opus $0.45 | Claude Opus $0.45 |
-| **Monthly total** | **~$120** | **~$8** |
+| **Monthly total** (typical heavy user) | **~$240** | **~$7** — **~97% cheaper** |
 
-`nexus report` turns this into one shareable artifact: **$ saved + % cheaper +
-"N secrets masked before leaving your machine · 0 leaked."**
+*Illustrative — your mix differs.* `nexus report` measures your real number and
+turns it into one shareable artifact: **$ saved + % cheaper + "N secrets masked
+before leaving your machine · 0 leaked."**
 
 ---
 
