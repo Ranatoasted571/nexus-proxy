@@ -1,0 +1,71 @@
+version: 2
+
+project_name: nexus
+
+before:
+  hooks:
+    - go mod tidy
+    - make build-web
+    - make embed
+
+builds:
+  - id: nexus
+    main: ./cmd/nexus
+    binary: nexus
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.BuildTime={{.Date}}
+
+archives:
+  - id: nexus
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  github:
+    owner: lynuxis2026-pixel
+    name: nexus-proxy
+  draft: false
+  prerelease: auto
+  header: |
+    ## NEXUS {{ .Tag }}
+    
+    Smart proxy + live dashboard for Claude Code.
+    Route requests to free/cheap LLMs automatically.
+    
+    ### Install
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/lynuxis2026-pixel/nexus-proxy/main/install.sh | sh
+    ```
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# Homebrew tap disabled until a `homebrew-nexus` tap repo + HOMEBREW_TAP_TOKEN exist.
+# Re-enable by restoring a `brews:` block once the tap is set up.
