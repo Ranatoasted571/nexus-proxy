@@ -1,122 +1,79 @@
 package router
 
 import (
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
 
-// ClassifyRequest analyzes a request and returns its complexity
+// ClassifyRequest analyzes a request and returns its complexity. The policy:
+//
+//   - security / production / urgency keywords  → Critical (premium, e.g. Opus)
+//   - architecture / large-build keywords       → Complex  (premium, e.g. Sonnet)
+//   - very large context, very long sessions,
+//     or an explicitly-chosen Opus model        → Complex
+//   - a trivial, tool-less, non-code ask         → Simple   (free tier)
+//   - everything else (ordinary coding, tool
+//     use, code edits)                           → Standard (cheap + capable)
+//
+// This deliberately routes the bulk of agentic coding to the cheap Standard tier
+// (which handles tool calls reliably), keeps the free tier for genuinely trivial
+// chat, and reserves premium models for hard, large, or critical work.
 func ClassifyRequest(model string, messages []map[string]interface{}, hasTools bool) Complexity {
-	// 1. Critical keywords override everything
+	// Intent keywords come from the *user's* words, not the assistant's verbose
+	// replies (an assistant explaining "architecture" must not escalate the next
+	// turn). Size signals use the whole payload.
 	allText := extractAllText(messages)
-	if hasCriticalKeywords(allText) {
+	userLower := strings.ToLower(extractUserText(messages))
+
+	if hasCriticalKeywords(userLower) {
 		return ComplexityCritical
 	}
-
-	// 2. Complex keywords
-	if hasComplexKeywords(allText) {
+	if hasComplexKeywords(userLower) {
 		return ComplexityComplex
 	}
 
-	// 3. Model hint from Claude Code
-	// Claude Code itself picks the model based on task complexity
-	// We can use this as a signal
-	modelComplexity := modelToComplexity(model)
-
-	// 4. Content signals
-	tokenCount := estimateTokens(allText)
-	hasCodeBlocks := strings.Contains(allText, "```")
-	hasToolUse := hasTools
-	conversationLength := len(messages)
-
-	// Score-based classification
-	score := 0
-
-	// Token count signals
-	if tokenCount > 2000 {
-		score += 3
-	} else if tokenCount > 500 {
-		score += 1
-	}
-
-	// Content signals
-	if hasCodeBlocks {
-		score += 1
-	}
-	if hasToolUse {
-		score += 2
-	}
-	if conversationLength > 10 {
-		score += 1
-	}
-
-	// Model hint
-	switch modelComplexity {
-	case ComplexityCritical:
-		score += 4
-	case ComplexityComplex:
-		score += 2
-	case ComplexityStandard:
-		score += 1
-	}
-
-	// Map score to complexity
-	switch {
-	case score >= 6:
+	// Big context or long agentic sessions lean complex; an explicit Opus pick
+	// means Claude Code already escalated.
+	if estimateTokens(allText) > 4000 || len(messages) > 24 || modelToComplexity(model) == ComplexityCritical {
 		return ComplexityComplex
-	case score >= 3:
-		return ComplexityStandard
-	default:
+	}
+
+	hasCode := strings.Count(allText, "```") >= 2
+	standard := hasStandardKeywords(userLower)
+
+	// Trivial, tool-less, non-code ask → free tier. Tool-using requests stay at
+	// least Standard, since the free tier is less reliable at tool calls.
+	if !hasTools && !hasCode && !standard && isShortAsk(lastUserText(messages)) {
 		return ComplexitySimple
 	}
+	return ComplexityStandard
 }
 
-// hasCriticalKeywords checks for urgent/production/security signals
-func hasCriticalKeywords(text string) bool {
-	critical := []string{
-		"security vulnerability",
-		"sql injection",
-		"xss",
-		"csrf",
-		"authentication bypass",
-		"production down",
-		"production issue",
-		"data breach",
-		"data loss",
-		"critical bug",
-		"hotfix",
-		"urgent",
-		"emergency",
-		"outage",
+var reShortCritical = regexp.MustCompile(`\b(xss|csrf|rce|ssrf|cve)\b`)
+
+func hasCriticalKeywords(lower string) bool {
+	phrases := []string{
+		"security vulnerability", "sql injection", "authentication bypass",
+		"production down", "production outage", "production incident", "prod is down",
+		"data breach", "data loss", "critical bug", "hotfix", "urgent", "emergency", "outage",
 	}
-	lower := strings.ToLower(text)
-	for _, kw := range critical {
+	for _, kw := range phrases {
 		if strings.Contains(lower, kw) {
 			return true
 		}
 	}
-	return false
+	return reShortCritical.MatchString(lower)
 }
 
-// hasComplexKeywords checks for architecture/planning signals
-func hasComplexKeywords(text string) bool {
+func hasComplexKeywords(lower string) bool {
 	complex := []string{
-		"architecture",
-		"design pattern",
-		"system design",
-		"microservices",
-		"scalability",
-		"performance optimization",
-		"refactor the entire",
-		"redesign",
-		"implement from scratch",
-		"build a full",
-		"create a complete",
-		"comprehensive",
-		"step by step plan",
-		"roadmap",
+		"architecture", "design pattern", "system design", "microservice",
+		"scalability", "performance optimization", "refactor the entire",
+		"redesign", "implement from scratch", "build a full", "build the entire",
+		"create a complete", "comprehensive", "step by step plan", "step-by-step plan",
+		"roadmap", "high-level design", "trade-offs", "tradeoffs",
 	}
-	lower := strings.ToLower(text)
 	for _, kw := range complex {
 		if strings.Contains(lower, kw) {
 			return true
@@ -125,8 +82,33 @@ func hasComplexKeywords(text string) bool {
 	return false
 }
 
-// modelToComplexity maps Claude model names to complexity levels
-// Claude Code uses specific models for specific task types
+// hasStandardKeywords flags ordinary, real coding intent — enough to keep a short
+// tool-less coding ask off the free tier (but not premium).
+func hasStandardKeywords(lower string) bool {
+	std := []string{
+		"refactor", "debug", "implement", "fix the", "fix this", "the bug",
+		"write a", "unit test", "stack trace", "type error", "compile",
+		"optimize", "rename", "migrate", "add a function", "add a method",
+		"why does", "why isn't", "error:", "exception", "traceback",
+	}
+	for _, kw := range std {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// isShortAsk reports whether text reads like a short, casual question.
+func isShortAsk(text string) bool {
+	t := strings.TrimSpace(text)
+	if t == "" {
+		return true
+	}
+	return len(strings.Fields(t)) <= 16 && utf8.RuneCountInString(t) < 200
+}
+
+// modelToComplexity maps Claude model names to a complexity hint.
 func modelToComplexity(model string) Complexity {
 	lower := strings.ToLower(model)
 	switch {
@@ -141,31 +123,64 @@ func modelToComplexity(model string) Complexity {
 	}
 }
 
-// extractAllText pulls all text content from messages
-func extractAllText(messages []map[string]interface{}) string {
-	var parts []string
-	for _, msg := range messages {
-		switch c := msg["content"].(type) {
-		case string:
-			parts = append(parts, c)
-		case []interface{}:
-			for _, block := range c {
-				if b, ok := block.(map[string]interface{}); ok {
-					if b["type"] == "text" {
-						if t, ok := b["text"].(string); ok {
-							parts = append(parts, t)
-						}
+// lastUserText returns the text of the most recent user message.
+func lastUserText(messages []map[string]interface{}) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if r, _ := messages[i]["role"].(string); r != "user" && r != "" {
+			continue
+		}
+		return msgText(messages[i])
+	}
+	if len(messages) > 0 {
+		return msgText(messages[len(messages)-1])
+	}
+	return ""
+}
+
+func msgText(msg map[string]interface{}) string {
+	switch c := msg["content"].(type) {
+	case string:
+		return c
+	case []interface{}:
+		var parts []string
+		for _, block := range c {
+			if b, ok := block.(map[string]interface{}); ok {
+				if b["type"] == "text" {
+					if t, ok := b["text"].(string); ok {
+						parts = append(parts, t)
 					}
 				}
 			}
+		}
+		return strings.Join(parts, " ")
+	}
+	return ""
+}
+
+// extractUserText pulls text from user messages only — the human's intent.
+func extractUserText(messages []map[string]interface{}) string {
+	var parts []string
+	for _, msg := range messages {
+		if r, _ := msg["role"].(string); r != "user" && r != "" {
+			continue
+		}
+		if s := msgText(msg); s != "" {
+			parts = append(parts, s)
 		}
 	}
 	return strings.Join(parts, " ")
 }
 
-// estimateTokens gives a rough token count estimate
-// Rule of thumb: ~4 chars per token for English
-func estimateTokens(text string) int {
-	charCount := utf8.RuneCountInString(text)
-	return charCount / 4
+// extractAllText pulls all text content from every message.
+func extractAllText(messages []map[string]interface{}) string {
+	var parts []string
+	for _, msg := range messages {
+		if s := msgText(msg); s != "" {
+			parts = append(parts, s)
+		}
+	}
+	return strings.Join(parts, " ")
 }
+
+// estimateTokens is a rough char/4 token estimate.
+func estimateTokens(text string) int { return utf8.RuneCountInString(text) / 4 }
