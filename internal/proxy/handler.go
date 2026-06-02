@@ -368,11 +368,12 @@ func (h *Handler) relayAnthropicSync(w http.ResponseWriter, active *activeProvid
 		log.Warn().Err(err).Msg("Failed to write response to client")
 	}
 
-	in, out := parseAnthropicUsage(respBody)
-	h.logResult(active, req, complexity, in, out, resp.StatusCode, time.Since(startTime), false)
+	u := anthropicUsageFull(respBody)
+	h.logResult(active, req, complexity, u, resp.StatusCode, time.Since(startTime), false)
 	log.Info().
 		Str("provider", active.impl.Name()).
 		Int("status", resp.StatusCode).
+		Int("cache_read", u.CacheRead).
 		Int64("latency_ms", time.Since(startTime).Milliseconds()).
 		Str("complexity", complexity.String()).
 		Msg("Request completed")
@@ -394,12 +395,12 @@ func (h *Handler) relayAnthropicBuffered(w http.ResponseWriter, active *activePr
 		w.Header().Set("X-Nexus-Provider", active.impl.Name())
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(respBody)
-		h.logResult(active, req, complexity, 0, 0, resp.StatusCode, time.Since(startTime), req.Stream)
+		h.logResult(active, req, complexity, tokenUsage{}, resp.StatusCode, time.Since(startTime), req.Stream)
 		log.Warn().Str("provider", active.impl.Name()).Int("status", resp.StatusCode).Msg("Provider returned error")
 		return
 	}
 
-	in, out := parseAnthropicUsage(respBody)
+	u := anthropicUsageFull(respBody)
 	if req.Stream {
 		var ar AnthropicResponse
 		if json.Unmarshal(respBody, &ar) == nil && len(ar.Content) > 0 {
@@ -421,10 +422,10 @@ func (h *Handler) relayAnthropicBuffered(w http.ResponseWriter, active *activePr
 		_, _ = w.Write(respBody)
 	}
 
-	h.logResult(active, req, complexity, in, out, http.StatusOK, time.Since(startTime), req.Stream)
+	h.logResult(active, req, complexity, u, http.StatusOK, time.Since(startTime), req.Stream)
 	log.Info().
 		Str("provider", active.impl.Name()).
-		Int("in", in).Int("out", out).
+		Int("in", u.In).Int("out", u.Out).
 		Int64("latency_ms", time.Since(startTime).Milliseconds()).
 		Bool("stream", req.Stream).
 		Msg("Request completed (anthropic-native)")
@@ -446,22 +447,27 @@ func (h *Handler) resolveAnthropicKey(active *activeProvider, origHeaders http.H
 }
 
 // logResult records a completed request to storage and pushes live events.
-func (h *Handler) logResult(active *activeProvider, req AnthropicRequest, complexity router.Complexity, inTok, outTok, status int, latency time.Duration, stream bool) {
+func (h *Handler) logResult(active *activeProvider, req AnthropicRequest, complexity router.Complexity, u tokenUsage, status int, latency time.Duration, stream bool) {
 	now := time.Now()
-	cost := active.impl.Pricing().CalculateCost(inTok, outTok)
+	pricing := active.impl.Pricing()
+	cost := pricing.CalculateCostFull(u.In, u.Out, u.CacheRead, u.CacheWrite)
+	cacheSaved := pricing.CacheReadSavings(u.CacheRead)
 	h.budget.Add(cost)
 	rec := &storage.Request{
-		CreatedAt:    now,
-		ModelAsked:   req.Model,
-		ModelUsed:    active.impl.MapModel(req.Model),
-		Provider:     active.impl.Name(),
-		Complexity:   complexity.String(),
-		InputTokens:  inTok,
-		OutputTokens: outTok,
-		CostUSD:      cost,
-		LatencyMS:    latency.Milliseconds(),
-		Status:       status,
-		Stream:       stream,
+		CreatedAt:        now,
+		ModelAsked:       req.Model,
+		ModelUsed:        active.impl.MapModel(req.Model),
+		Provider:         active.impl.Name(),
+		Complexity:       complexity.String(),
+		InputTokens:      u.In,
+		OutputTokens:     u.Out,
+		CacheReadTokens:  u.CacheRead,
+		CacheWriteTokens: u.CacheWrite,
+		CostUSD:          cost,
+		CacheSavedUSD:    cacheSaved,
+		LatencyMS:        latency.Milliseconds(),
+		Status:           status,
+		Stream:           stream,
 	}
 
 	var id int64
@@ -479,9 +485,12 @@ func (h *Handler) logResult(active *activeProvider, req AnthropicRequest, comple
 			ModelAsked:   rec.ModelAsked,
 			ModelUsed:    rec.ModelUsed,
 			Complexity:   rec.Complexity,
-			InputTokens:  inTok,
-			OutputTokens: outTok,
+			InputTokens:  u.In,
+			OutputTokens: u.Out,
+			CacheRead:    u.CacheRead,
+			CacheWrite:   u.CacheWrite,
 			CostUSD:      cost,
+			CacheSavedUSD: cacheSaved,
 			LatencyMS:    rec.LatencyMS,
 			Status:       status,
 			Timestamp:    now.Format(time.RFC3339),
@@ -501,11 +510,13 @@ func (h *Handler) publishStats() {
 	}
 	forecast, _ := h.db.GetCostForecast()
 	h.broker.Publish("stats", map[string]interface{}{
-		"total_requests": stats.TotalRequests,
-		"total_cost_usd": stats.TotalCostUSD,
-		"total_tokens":   stats.TotalInputTokens + stats.TotalOutputTokens,
-		"forecast_usd":   forecast,
-		"avg_latency_ms": stats.AvgLatencyMS,
+		"total_requests":  stats.TotalRequests,
+		"total_cost_usd":  stats.TotalCostUSD,
+		"total_tokens":    stats.TotalInputTokens + stats.TotalOutputTokens,
+		"forecast_usd":    forecast,
+		"avg_latency_ms":  stats.AvgLatencyMS,
+		"cache_saved_usd": stats.CacheSavedUSD,
+		"cache_read_tokens": stats.CacheReadTokens,
 	})
 }
 
@@ -683,17 +694,20 @@ func parseAnthropicUsage(body []byte) (in, out int) {
 
 // requestEvent is the payload pushed to the dashboard after each request.
 type requestEvent struct {
-	ID           int64   `json:"id"`
-	Provider     string  `json:"provider"`
-	ModelAsked   string  `json:"model_asked"`
-	ModelUsed    string  `json:"model_used"`
-	Complexity   string  `json:"complexity"`
-	InputTokens  int     `json:"input_tokens"`
-	OutputTokens int     `json:"output_tokens"`
-	CostUSD      float64 `json:"cost_usd"`
-	LatencyMS    int64   `json:"latency_ms"`
-	Status       int     `json:"status"`
-	Timestamp    string  `json:"timestamp"`
+	ID            int64   `json:"id"`
+	Provider      string  `json:"provider"`
+	ModelAsked    string  `json:"model_asked"`
+	ModelUsed     string  `json:"model_used"`
+	Complexity    string  `json:"complexity"`
+	InputTokens   int     `json:"input_tokens"`
+	OutputTokens  int     `json:"output_tokens"`
+	CacheRead     int     `json:"cache_read,omitempty"`
+	CacheWrite    int     `json:"cache_write,omitempty"`
+	CostUSD       float64 `json:"cost_usd"`
+	CacheSavedUSD float64 `json:"cache_saved_usd,omitempty"`
+	LatencyMS     int64   `json:"latency_ms"`
+	Status        int     `json:"status"`
+	Timestamp     string  `json:"timestamp"`
 }
 
 // AnthropicRequest represents an incoming Claude Code request

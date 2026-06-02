@@ -172,10 +172,10 @@ func (h *Handler) relayOpenAIPassthrough(w http.ResponseWriter, active *activePr
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(respBody)
 
-	in, out := parseOpenAIUsage(respBody)
-	h.logResult(active, areq, complexity, in, out, resp.StatusCode, time.Since(startTime), false)
+	u := openAIUsageFull(respBody)
+	h.logResult(active, areq, complexity, u, resp.StatusCode, time.Since(startTime), false)
 	log.Info().Str("provider", active.impl.Name()).Int("status", resp.StatusCode).
-		Int("in", in).Int("out", out).Str("complexity", complexity.String()).Msg("Request completed (gateway)")
+		Int("in", u.In).Int("out", u.Out).Int("cache_read", u.CacheRead).Str("complexity", complexity.String()).Msg("Request completed (gateway)")
 }
 
 func (h *Handler) relayOpenAIPassthroughStream(w http.ResponseWriter, active *activeProvider, areq AnthropicRequest, resp *http.Response, startTime time.Time, complexity router.Complexity) {
@@ -210,9 +210,9 @@ func (h *Handler) relayOpenAIPassthroughStream(w http.ResponseWriter, active *ac
 			break
 		}
 	}
-	in, out := parseOpenAIUsage(captured.Bytes())
-	h.logResult(active, areq, complexity, in, out, resp.StatusCode, time.Since(startTime), true)
-	log.Info().Str("provider", active.impl.Name()).Int("in", in).Int("out", out).Bool("stream", true).Msg("Stream completed (gateway)")
+	u := openAIUsageFull(captured.Bytes())
+	h.logResult(active, areq, complexity, u, resp.StatusCode, time.Since(startTime), true)
+	log.Info().Str("provider", active.impl.Name()).Int("in", u.In).Int("out", u.Out).Int("cache_read", u.CacheRead).Bool("stream", true).Msg("Stream completed (gateway)")
 }
 
 // relayAnthropicToOpenAI converts an Anthropic provider response into OpenAI format.
@@ -224,13 +224,18 @@ func (h *Handler) relayAnthropicToOpenAI(w http.ResponseWriter, active *activePr
 		w.Header().Set("X-Nexus-Provider", active.impl.Name())
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(respBody)
-		h.logResult(active, areq, complexity, 0, 0, resp.StatusCode, time.Since(startTime), oreq.Stream)
+		h.logResult(active, areq, complexity, tokenUsage{}, resp.StatusCode, time.Since(startTime), oreq.Stream)
 		return
 	}
 	var ar AnthropicResponse
 	_ = json.Unmarshal(respBody, &ar)
 	oaiResp := anthropicRespToOpenAIMap(ar, oreq.Model)
-	in, out := ar.Usage.InputTokens, ar.Usage.OutputTokens
+	u := tokenUsage{
+		In:         ar.Usage.InputTokens,
+		Out:        ar.Usage.OutputTokens,
+		CacheRead:  ar.Usage.CacheReadInputTokens,
+		CacheWrite: ar.Usage.CacheCreationInputTokens,
+	}
 
 	if oreq.Stream {
 		writeOpenAISSE(w, active.impl.Name(), oaiResp)
@@ -240,8 +245,8 @@ func (h *Handler) relayAnthropicToOpenAI(w http.ResponseWriter, active *activePr
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(oaiResp)
 	}
-	h.logResult(active, areq, complexity, in, out, http.StatusOK, time.Since(startTime), oreq.Stream)
-	log.Info().Str("provider", active.impl.Name()).Int("in", in).Int("out", out).Bool("stream", oreq.Stream).Msg("Request completed (gateway→anthropic)")
+	h.logResult(active, areq, complexity, u, http.StatusOK, time.Since(startTime), oreq.Stream)
+	log.Info().Str("provider", active.impl.Name()).Int("in", u.In).Int("out", u.Out).Bool("stream", oreq.Stream).Msg("Request completed (gateway→anthropic)")
 }
 
 // writeOpenAISSE synthesizes an OpenAI streaming response from a full response map.

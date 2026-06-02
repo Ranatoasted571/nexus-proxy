@@ -95,12 +95,14 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 	forecast, _ := s.db.GetCostForecast()
 	writeJSON(w, map[string]interface{}{
-		"period":         period,
-		"total_requests": stats.TotalRequests,
-		"total_cost_usd": stats.TotalCostUSD,
-		"total_tokens":   stats.TotalInputTokens + stats.TotalOutputTokens,
-		"forecast_usd":   forecast,
-		"avg_latency_ms": stats.AvgLatencyMS,
+		"period":            period,
+		"total_requests":    stats.TotalRequests,
+		"total_cost_usd":    stats.TotalCostUSD,
+		"total_tokens":      stats.TotalInputTokens + stats.TotalOutputTokens,
+		"forecast_usd":      forecast,
+		"avg_latency_ms":    stats.AvgLatencyMS,
+		"cache_saved_usd":   stats.CacheSavedUSD,
+		"cache_read_tokens": stats.CacheReadTokens,
 	})
 }
 

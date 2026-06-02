@@ -63,7 +63,10 @@ func (db *DB) migrate() error {
 		complexity    TEXT NOT NULL,    -- simple|standard|complex|critical
 		input_tokens  INTEGER DEFAULT 0,
 		output_tokens INTEGER DEFAULT 0,
+		cache_read_tokens  INTEGER DEFAULT 0,
+		cache_write_tokens INTEGER DEFAULT 0,
 		cost_usd      REAL DEFAULT 0,
+		cache_saved_usd REAL DEFAULT 0,
 		latency_ms    INTEGER DEFAULT 0,
 		status        INTEGER DEFAULT 200,
 		error         TEXT,
@@ -96,8 +99,21 @@ func (db *DB) migrate() error {
 	);
 	`
 
-	_, err := db.conn.Exec(schema)
-	return err
+	if _, err := db.conn.Exec(schema); err != nil {
+		return err
+	}
+
+	// Idempotent column additions for databases created before these columns
+	// existed. SQLite has no "ADD COLUMN IF NOT EXISTS", so we run each and
+	// ignore the "duplicate column name" error on already-migrated DBs.
+	for _, stmt := range []string{
+		`ALTER TABLE requests ADD COLUMN cache_read_tokens INTEGER DEFAULT 0`,
+		`ALTER TABLE requests ADD COLUMN cache_write_tokens INTEGER DEFAULT 0`,
+		`ALTER TABLE requests ADD COLUMN cache_saved_usd REAL DEFAULT 0`,
+	} {
+		_, _ = db.conn.Exec(stmt)
+	}
+	return nil
 }
 
 // DefaultDBPath returns the default database path

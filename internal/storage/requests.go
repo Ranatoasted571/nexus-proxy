@@ -9,20 +9,23 @@ import (
 
 // Request represents a logged proxy request
 type Request struct {
-	ID           int64
-	CreatedAt    time.Time
-	RequestID    string
-	ModelAsked   string
-	ModelUsed    string
-	Provider     string
-	Complexity   string
-	InputTokens  int
-	OutputTokens int
-	CostUSD      float64
-	LatencyMS    int64
-	Status       int
-	Error        string
-	Stream       bool
+	ID               int64
+	CreatedAt        time.Time
+	RequestID        string
+	ModelAsked       string
+	ModelUsed        string
+	Provider         string
+	Complexity       string
+	InputTokens      int
+	OutputTokens     int
+	CacheReadTokens  int
+	CacheWriteTokens int
+	CostUSD          float64
+	CacheSavedUSD    float64
+	LatencyMS        int64
+	Status           int
+	Error            string
+	Stream           bool
 }
 
 // LogRequest saves a request to the database and returns the new row ID.
@@ -31,8 +34,9 @@ func (db *DB) LogRequest(req *Request) (int64, error) {
 		INSERT INTO requests (
 			created_at, request_id, model_asked, model_used,
 			provider, complexity, input_tokens, output_tokens,
-			cost_usd, latency_ms, status, error, stream
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			cache_read_tokens, cache_write_tokens,
+			cost_usd, cache_saved_usd, latency_ms, status, error, stream
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		// Store as SQLite-native UTC datetime text so date()/strftime() work.
 		req.CreatedAt.UTC().Format("2006-01-02 15:04:05"),
 		req.RequestID,
@@ -42,7 +46,10 @@ func (db *DB) LogRequest(req *Request) (int64, error) {
 		req.Complexity,
 		req.InputTokens,
 		req.OutputTokens,
+		req.CacheReadTokens,
+		req.CacheWriteTokens,
 		req.CostUSD,
+		req.CacheSavedUSD,
 		req.LatencyMS,
 		req.Status,
 		req.Error,
@@ -92,7 +99,10 @@ func (db *DB) GetStats(period string) (*Stats, error) {
 			COALESCE(SUM(input_tokens), 0) as total_input_tokens,
 			COALESCE(SUM(output_tokens), 0) as total_output_tokens,
 			COALESCE(SUM(cost_usd), 0) as total_cost,
-			COALESCE(AVG(latency_ms), 0) as avg_latency
+			COALESCE(AVG(latency_ms), 0) as avg_latency,
+			COALESCE(SUM(cache_read_tokens), 0) as cache_read_tokens,
+			COALESCE(SUM(cache_write_tokens), 0) as cache_write_tokens,
+			COALESCE(SUM(cache_saved_usd), 0) as cache_saved_usd
 		FROM requests
 		WHERE date(created_at) >= %s`, since)
 
@@ -103,6 +113,9 @@ func (db *DB) GetStats(period string) (*Stats, error) {
 		&stats.TotalOutputTokens,
 		&stats.TotalCostUSD,
 		&stats.AvgLatencyMS,
+		&stats.CacheReadTokens,
+		&stats.CacheWriteTokens,
+		&stats.CacheSavedUSD,
 	)
 	if err != nil {
 		return nil, err
@@ -189,12 +202,13 @@ func (db *DB) GetHourlySeries() ([]TimeBucket, error) {
 // Savings compares actual spend to what the same traffic would have cost on
 // Anthropic Claude — the headline "you saved $X" metric.
 type Savings struct {
-	Period       string  `json:"period"`
-	Requests     int     `json:"requests"`
-	ActualUSD    float64 `json:"actual_usd"`
-	BaselineUSD  float64 `json:"baseline_usd"`
-	SavedUSD     float64 `json:"saved_usd"`
-	PercentSaved float64 `json:"percent_saved"`
+	Period        string  `json:"period"`
+	Requests      int     `json:"requests"`
+	ActualUSD     float64 `json:"actual_usd"`
+	BaselineUSD   float64 `json:"baseline_usd"`
+	SavedUSD      float64 `json:"saved_usd"`
+	PercentSaved  float64 `json:"percent_saved"`
+	CacheSavedUSD float64 `json:"cache_saved_usd"` // portion of savings from prompt caching
 }
 
 // anthropicBaseline returns what a request would have cost on Claude, based on
@@ -225,7 +239,8 @@ func sinceClause(period string) string {
 
 // GetSavings returns the actual vs. Claude-baseline cost for a period.
 func (db *DB) GetSavings(period string) (*Savings, error) {
-	q := fmt.Sprintf(`SELECT model_asked, input_tokens, output_tokens, cost_usd
+	q := fmt.Sprintf(`SELECT model_asked, input_tokens, output_tokens,
+			cache_read_tokens, cache_write_tokens, cost_usd, cache_saved_usd
 		FROM requests WHERE date(created_at) >= %s`, sinceClause(period))
 	rows, err := db.conn.Query(q)
 	if err != nil {
@@ -236,14 +251,16 @@ func (db *DB) GetSavings(period string) (*Savings, error) {
 	s := &Savings{Period: period}
 	for rows.Next() {
 		var model string
-		var in, out int
-		var cost float64
-		if err := rows.Scan(&model, &in, &out, &cost); err != nil {
+		var in, out, cr, cw int
+		var cost, cacheSaved float64
+		if err := rows.Scan(&model, &in, &out, &cr, &cw, &cost, &cacheSaved); err != nil {
 			continue
 		}
 		s.Requests++
 		s.ActualUSD += cost
-		s.BaselineUSD += anthropicBaseline(model, in, out)
+		// On all-Claude, cached tokens would have been full-price input too.
+		s.BaselineUSD += anthropicBaseline(model, in+cr+cw, out)
+		s.CacheSavedUSD += cacheSaved
 	}
 	s.SavedUSD = s.BaselineUSD - s.ActualUSD
 	if s.SavedUSD < 0 {
@@ -302,6 +319,9 @@ type Stats struct {
 	TotalOutputTokens int     `json:"total_output_tokens"`
 	TotalCostUSD      float64 `json:"total_cost_usd"`
 	AvgLatencyMS      float64 `json:"avg_latency_ms"`
+	CacheReadTokens   int     `json:"cache_read_tokens"`
+	CacheWriteTokens  int     `json:"cache_write_tokens"`
+	CacheSavedUSD     float64 `json:"cache_saved_usd"`
 }
 
 type ProviderStats struct {

@@ -32,7 +32,7 @@ func (h *Handler) relayOpenAI(w http.ResponseWriter, active *activeProvider, req
 		w.Header().Set("X-Nexus-Provider", active.impl.Name())
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(respBody)
-		h.logResult(active, req, complexity, 0, 0, resp.StatusCode, time.Since(startTime), req.Stream)
+		h.logResult(active, req, complexity, tokenUsage{}, resp.StatusCode, time.Since(startTime), req.Stream)
 		log.Warn().Str("provider", active.impl.Name()).Int("status", resp.StatusCode).Msg("Provider returned error")
 		return
 	}
@@ -44,8 +44,7 @@ func (h *Handler) relayOpenAI(w http.ResponseWriter, active *activeProvider, req
 	}
 
 	anthResp := TransformFromOpenAI(oaiResp, req.Model)
-	inTok := oaiResp.Usage.PromptTokens
-	outTok := oaiResp.Usage.CompletionTokens
+	u := openAIUsageFull(respBody) // captures DeepSeek/OpenAI prompt-cache tokens
 
 	if req.Stream {
 		writeAnthropicSSE(w, active.impl.Name(), anthResp)
@@ -57,12 +56,13 @@ func (h *Handler) relayOpenAI(w http.ResponseWriter, active *activeProvider, req
 		_ = json.NewEncoder(w).Encode(anthResp)
 	}
 
-	h.logResult(active, req, complexity, inTok, outTok, http.StatusOK, time.Since(startTime), req.Stream)
+	h.logResult(active, req, complexity, u, http.StatusOK, time.Since(startTime), req.Stream)
 	log.Info().
 		Str("provider", active.impl.Name()).
 		Str("model_used", active.impl.MapModel(req.Model)).
-		Int("in", inTok).
-		Int("out", outTok).
+		Int("in", u.In).
+		Int("out", u.Out).
+		Int("cache_read", u.CacheRead).
 		Int64("latency_ms", time.Since(startTime).Milliseconds()).
 		Str("complexity", complexity.String()).
 		Bool("stream", req.Stream).
@@ -163,8 +163,12 @@ type oaiStreamChunk struct {
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`
 	Usage *struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
+		PromptTokens         int `json:"prompt_tokens"`
+		CompletionTokens     int `json:"completion_tokens"`
+		PromptCacheHitTokens int `json:"prompt_cache_hit_tokens"` // DeepSeek
+		PromptTokensDetails  struct {
+			CachedTokens int `json:"cached_tokens"` // OpenAI
+		} `json:"prompt_tokens_details"`
 	} `json:"usage"`
 }
 
@@ -186,7 +190,7 @@ func (h *Handler) relayOpenAIStream(w http.ResponseWriter, active *activeProvide
 		w.Header().Set("X-Nexus-Provider", active.impl.Name())
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(body)
-		h.logResult(active, req, complexity, 0, 0, resp.StatusCode, time.Since(startTime), true)
+		h.logResult(active, req, complexity, tokenUsage{}, resp.StatusCode, time.Since(startTime), true)
 		return
 	}
 
@@ -218,7 +222,7 @@ func (h *Handler) relayOpenAIStream(w http.ResponseWriter, active *activeProvide
 	var toolOrder []int
 	textOpen := false
 	finish := "stop"
-	inTok, outTok := 0, 0
+	inTok, outTok, cachedTok := 0, 0, 0
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -238,6 +242,10 @@ func (h *Handler) relayOpenAIStream(w http.ResponseWriter, active *activeProvide
 		if chunk.Usage != nil {
 			inTok = chunk.Usage.PromptTokens
 			outTok = chunk.Usage.CompletionTokens
+			cachedTok = chunk.Usage.PromptCacheHitTokens
+			if d := chunk.Usage.PromptTokensDetails.CachedTokens; d > cachedTok {
+				cachedTok = d
+			}
 		}
 		if len(chunk.Choices) == 0 {
 			continue
@@ -288,10 +296,14 @@ func (h *Handler) relayOpenAIStream(w http.ResponseWriter, active *activeProvide
 	send("message_delta", map[string]interface{}{"type": "message_delta", "delta": map[string]interface{}{"stop_reason": mapStopReason(finish), "stop_sequence": nil}, "usage": map[string]interface{}{"output_tokens": outTok}})
 	send("message_stop", map[string]interface{}{"type": "message_stop"})
 
-	h.logResult(active, req, complexity, inTok, outTok, http.StatusOK, time.Since(startTime), true)
+	if cachedTok > inTok {
+		cachedTok = inTok
+	}
+	u := tokenUsage{In: inTok - cachedTok, Out: outTok, CacheRead: cachedTok}
+	h.logResult(active, req, complexity, u, http.StatusOK, time.Since(startTime), true)
 	log.Info().
 		Str("provider", active.impl.Name()).
-		Int("in", inTok).Int("out", outTok).
+		Int("in", u.In).Int("out", u.Out).Int("cache_read", u.CacheRead).
 		Int64("latency_ms", time.Since(startTime).Milliseconds()).
 		Bool("stream", true).
 		Msg("Stream completed (openai live)")

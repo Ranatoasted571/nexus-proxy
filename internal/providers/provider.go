@@ -20,16 +20,53 @@ type Provider interface {
 	ChatCompletionsURL() string
 }
 
-// PricingInfo holds cost per million tokens
+// PricingInfo holds cost per million tokens.
 type PricingInfo struct {
-	InputPer1M  float64 // USD
-	OutputPer1M float64 // USD
+	InputPer1M  float64 // USD per 1M input tokens
+	OutputPer1M float64 // USD per 1M output tokens
+	// Optional cache pricing. When zero, sensible defaults are derived from the
+	// input price: cache reads at 0.1× input (Anthropic/DeepSeek-style) and cache
+	// writes at 1.25× input (Anthropic-style).
+	CacheReadPer1M  float64
+	CacheWritePer1M float64
 }
 
-// CalculateCost returns the cost for a given token count
+func (p PricingInfo) cacheReadRate() float64 {
+	if p.CacheReadPer1M > 0 {
+		return p.CacheReadPer1M
+	}
+	return p.InputPer1M * 0.1
+}
+
+func (p PricingInfo) cacheWriteRate() float64 {
+	if p.CacheWritePer1M > 0 {
+		return p.CacheWritePer1M
+	}
+	return p.InputPer1M * 1.25
+}
+
+// CalculateCost returns the cost for plain input/output token counts.
 func (p PricingInfo) CalculateCost(inputTokens, outputTokens int) float64 {
 	return (float64(inputTokens)/1_000_000)*p.InputPer1M +
 		(float64(outputTokens)/1_000_000)*p.OutputPer1M
+}
+
+// CalculateCostFull prices a full usage breakdown, applying the cache-read
+// discount and cache-write premium on top of normal input/output pricing.
+func (p PricingInfo) CalculateCostFull(in, out, cacheRead, cacheWrite int) float64 {
+	return p.CalculateCost(in, out) +
+		(float64(cacheRead)/1_000_000)*p.cacheReadRate() +
+		(float64(cacheWrite)/1_000_000)*p.cacheWriteRate()
+}
+
+// CacheReadSavings reports how much the cache-read tokens saved versus paying
+// the full input price for them — the "cache saved $X" headline number.
+func (p PricingInfo) CacheReadSavings(cacheRead int) float64 {
+	saved := (float64(cacheRead) / 1_000_000) * (p.InputPer1M - p.cacheReadRate())
+	if saved < 0 {
+		return 0
+	}
+	return saved
 }
 
 // ─── Model Mapping ─────────────────────────────────────────────────────────

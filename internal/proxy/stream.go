@@ -72,13 +72,14 @@ func (h *Handler) relayAnthropicStream(w http.ResponseWriter, r *http.Request, a
 		}
 	}
 
-	in, out := parseStreamUsage(captured.Bytes())
-	h.logResult(active, req, complexity, in, out, resp.StatusCode, time.Since(startTime), true)
+	u := streamUsageFull(captured.Bytes())
+	h.logResult(active, req, complexity, u, resp.StatusCode, time.Since(startTime), true)
 	log.Info().
 		Str("provider", active.impl.Name()).
 		Int("status", resp.StatusCode).
-		Int("in", in).
-		Int("out", out).
+		Int("in", u.In).
+		Int("out", u.Out).
+		Int("cache_read", u.CacheRead).
 		Int64("latency_ms", time.Since(startTime).Milliseconds()).
 		Bool("stream", true).
 		Msg("Stream completed")
