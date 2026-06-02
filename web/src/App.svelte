@@ -3,8 +3,12 @@
   import { Chart } from 'chart.js/auto'
   import {
     connectSSE, disconnectSSE, fetchInitial, fetchTimeseries, fetchSavings,
-    connected, stats, recentRequests, providers, providerBreakdown, timeseries, savings,
+    connected, stats, recentRequests, providers, providerBreakdown, complexityMix, timeseries, savings,
   } from './stores/requests'
+
+  const CX_COLOR: Record<string, string> = {
+    simple: '#10b981', standard: '#06b6d4', complex: '#7c3aed', critical: '#ef4444',
+  }
 
   const REPO = 'https://github.com/lynuxis2026-pixel/nexus-proxy'
   $: shareText = `I've saved $${$savings.saved_usd.toFixed(2)} on Claude Code with NEXUS 🚀 (${Math.round($savings.percent_saved)}% cheaper than Claude) — open-source smart LLM proxy`
@@ -146,6 +150,9 @@
     <div class="card"><span class="num cyan">${($stats.cache_saved_usd || 0).toFixed(4)}</span><span class="label">cache saved today</span></div>
     <div class="card"><span class="num">${$stats.forecast_usd.toFixed(2)}</span><span class="label">forecast / month</span></div>
     <div class="card"><span class="num">{Math.round($stats.avg_latency_ms)}ms</span><span class="label">avg latency</span></div>
+    <div class="card" title="Secrets & PII masked by the privacy firewall before requests left your machine">
+      <span class="num amber">🔒 {$stats.redacted_total || 0}</span><span class="label">secrets masked · 0 leaked</span>
+    </div>
   </div>
 
   {#if $providers.length}
@@ -155,6 +162,25 @@
           <span class="dot"></span>{p.name}<span class="tier">{p.tier}</span>
         </div>
       {/each}
+    </div>
+  {/if}
+
+  {#if $recentRequests.length}
+    <div class="panel mix-panel">
+      <div class="panel-title">Routing mix · last {$recentRequests.length} requests</div>
+      <div class="mixbar">
+        {#each $complexityMix as seg (seg.key)}
+          {#if seg.pct > 0}
+            <div class="seg" style="width:{seg.pct}%; background:{CX_COLOR[seg.key]}"
+                 title="{seg.key}: {seg.count} ({Math.round(seg.pct)}%)"></div>
+          {/if}
+        {/each}
+      </div>
+      <div class="mixlegend">
+        {#each $complexityMix as seg (seg.key)}
+          <span class="mleg"><span class="mdot" style="background:{CX_COLOR[seg.key]}"></span>{seg.key} <b>{seg.count}</b></span>
+        {/each}
+      </div>
     </div>
   {/if}
 
@@ -288,10 +314,10 @@
   .btn.ghost { background: transparent; color: #94a3b8; border-color: #1a2035; }
   .btn.ghost:hover { color: #e2e8f0; border-color: #2a2150; }
 
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 14px; }
   .card { display: flex; flex-direction: column; gap: 4px; background: #0a0e1a; border: 1px solid #1a2035; border-radius: 8px; padding: 18px 20px; }
   .num { font-size: 26px; font-weight: 700; font-family: 'Geist Mono', monospace; }
-  .num.accent { color: #7c3aed; } .num.green { color: #10b981; } .num.cyan { color: #06b6d4; }
+  .num.accent { color: #7c3aed; } .num.green { color: #10b981; } .num.cyan { color: #06b6d4; } .num.amber { color: #f59e0b; }
   .cache-note { color: #06b6d4; font-size: 13px; }
 
   .clickable { cursor: pointer; }
@@ -326,6 +352,15 @@
   .chip .dot { width: 7px; height: 7px; }
   .chip.up .dot { color: #10b981; } .chip.down .dot { color: #ef4444; }
   .chip .tier { color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; }
+
+  .mix-panel { margin-bottom: 14px; }
+  .mixbar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: #11182f; }
+  .seg { height: 100%; transition: width 0.4s ease; }
+  .seg:not(:last-child) { border-right: 1px solid #0a0e1a; }
+  .mixlegend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
+  .mleg { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #94a3b8; text-transform: capitalize; }
+  .mleg b { color: #e2e8f0; font-family: 'Geist Mono', monospace; }
+  .mdot { width: 9px; height: 9px; border-radius: 2px; }
 
   .charts { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; margin-bottom: 22px; }
   .panel { background: #0a0e1a; border: 1px solid #1a2035; border-radius: 8px; padding: 16px 18px; }

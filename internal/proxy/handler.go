@@ -786,6 +786,7 @@ func (h *Handler) publishStats() {
 		"avg_latency_ms":  stats.AvgLatencyMS,
 		"cache_saved_usd": stats.CacheSavedUSD,
 		"cache_read_tokens": stats.CacheReadTokens,
+		"redacted_total":  stats.RedactedTotal,
 	})
 }
 

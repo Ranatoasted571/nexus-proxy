@@ -22,6 +22,7 @@ export interface Stats {
   avg_latency_ms: number
   cache_saved_usd: number
   cache_read_tokens: number
+  redacted_total: number
 }
 
 export interface ProviderStatus {
@@ -56,6 +57,7 @@ export const stats = writable<Stats>({
   avg_latency_ms: 0,
   cache_saved_usd: 0,
   cache_read_tokens: 0,
+  redacted_total: 0,
 })
 export const providers = writable<ProviderStatus[]>([])
 export const timeseries = writable<TimeBucket[]>([])
@@ -66,6 +68,18 @@ export const connected = writable(false)
 
 // Derived: last 100 requests
 export const recentRequests = derived(requests, $r => $r.slice(0, 100))
+
+// Derived: routing mix by complexity tier, from the recent request window.
+// Shows how the classifier split traffic (simple→free, standard→cheap, …).
+export const complexityMix = derived(requests, $r => {
+  const order = ['simple', 'standard', 'complex', 'critical']
+  const counts: Record<string, number> = { simple: 0, standard: 0, complex: 0, critical: 0 }
+  for (const req of $r) {
+    if (req.complexity in counts) counts[req.complexity]++
+  }
+  const total = order.reduce((n, k) => n + counts[k], 0) || 1
+  return order.map(key => ({ key, count: counts[key], pct: (counts[key] / total) * 100 }))
+})
 
 // Derived: provider breakdown
 export const providerBreakdown = derived(requests, $r => {

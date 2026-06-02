@@ -113,6 +113,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"avg_latency_ms":    stats.AvgLatencyMS,
 		"cache_saved_usd":   stats.CacheSavedUSD,
 		"cache_read_tokens": stats.CacheReadTokens,
+		"redacted_total":    stats.RedactedTotal,
 	})
 }
 
@@ -414,6 +415,7 @@ func emptyStats(period string) map[string]interface{} {
 		"total_tokens":   0,
 		"forecast_usd":   0.0,
 		"avg_latency_ms": 0,
+		"redacted_total": 0,
 	}
 }
 
