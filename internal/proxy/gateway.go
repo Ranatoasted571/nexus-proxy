@@ -173,7 +173,8 @@ func (h *Handler) callOpenAIPassthrough(active *activeProvider, rawMap map[strin
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	h.authorize(active, req, payload, active.apiKey)
+	key, _ := active.pickKey()
+	h.authorize(active, req, payload, key)
 	return h.httpClient.Do(req)
 }
 

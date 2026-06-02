@@ -25,10 +25,49 @@ type EventPublisher interface {
 	Publish(eventType string, data interface{})
 }
 
-// activeProvider bundles a provider implementation with its API key.
+// activeProvider bundles a provider implementation with its API key pool. NEXUS
+// round-robins across keys and puts a key on a short cooldown when it returns a
+// 429, so a pool of free-tier keys behaves like one larger free quota.
 type activeProvider struct {
 	impl   providers.Provider
-	apiKey string
+	apiKey string // primary key (keys[0]) — used for health checks and single-key paths
+
+	mu   sync.Mutex
+	keys []string
+	rr   uint32
+	cool []time.Time // per-key "cooling until" timestamps
+}
+
+// pickKey returns the next non-cooling key (round-robin) and its index. With no
+// key pool it falls back to apiKey (index -1). If every key is cooling it
+// returns the next in rotation anyway (best effort).
+func (a *activeProvider) pickKey() (string, int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	n := len(a.keys)
+	if n == 0 {
+		return a.apiKey, -1
+	}
+	now := time.Now()
+	for off := 0; off < n; off++ {
+		a.rr = (a.rr + 1) % uint32(n)
+		if a.cool[a.rr].Before(now) {
+			return a.keys[a.rr], int(a.rr)
+		}
+	}
+	return a.keys[a.rr], int(a.rr)
+}
+
+// penalize puts a key on cooldown after a rate-limit response.
+func (a *activeProvider) penalize(idx int, d time.Duration) {
+	if idx < 0 {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if idx < len(a.cool) {
+		a.cool[idx] = time.Now().Add(d)
+	}
 }
 
 // Handler handles incoming Claude Code requests.
@@ -55,7 +94,8 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 	rt := router.New(router.RoutingStrategy(appCfg.Routing.Strategy))
 	active := make(map[string]*activeProvider)
 	for _, pc := range appCfg.Providers {
-		key := config.ResolveKey(pc.APIKey)
+		keys := resolveProviderKeys(pc)
+		key := keys[0]
 		impl, err := providers.New(providers.Spec{
 			Name:        pc.Name,
 			Type:        pc.Type,
@@ -74,7 +114,7 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 			log.Warn().Str("provider", pc.Name).Err(err).Msg("Skipping provider")
 			continue
 		}
-		active[impl.Name()] = &activeProvider{impl: impl, apiKey: key}
+		active[impl.Name()] = &activeProvider{impl: impl, apiKey: key, keys: keys, cool: make([]time.Time, len(keys))}
 		rt.AddProvider(&router.Provider{
 			Name:    impl.Name(),
 			BaseURL: impl.BaseURL(),
@@ -315,9 +355,50 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 	h.writeError(w, http.StatusBadGateway, "all providers unreachable")
 }
 
-// callUpstream issues the upstream HTTP request for the given provider.
-// It returns a transport error only — provider HTTP errors come back in *http.Response.
+// resolveProviderKeys returns the resolved key pool for a provider: api_keys if
+// present, else the single api_key (always ≥1 element, possibly "").
+func resolveProviderKeys(pc config.Provider) []string {
+	var out []string
+	for _, k := range pc.APIKeys {
+		out = append(out, config.ResolveKey(k))
+	}
+	if len(out) == 0 {
+		out = append(out, config.ResolveKey(pc.APIKey))
+	}
+	return out
+}
+
+// callUpstream issues the upstream HTTP request, rotating across the provider's
+// API key pool: on a 429 it cools the current key and retries with the next one,
+// so the handler only fails over to a different provider once every key for this
+// provider is rate-limited. It returns a transport error only — provider HTTP
+// errors come back in *http.Response.
 func (h *Handler) callUpstream(active *activeProvider, req AnthropicRequest, body []byte, origHeaders http.Header) (*http.Response, error) {
+	attempts := len(active.keys)
+	if attempts < 1 {
+		attempts = 1
+	}
+	var resp *http.Response
+	var err error
+	for i := 0; i < attempts; i++ {
+		key, idx := active.pickKey()
+		resp, err = h.callUpstreamOnce(active, req, body, origHeaders, key)
+		if err != nil {
+			return resp, err
+		}
+		if resp.StatusCode == http.StatusTooManyRequests && i < attempts-1 {
+			active.penalize(idx, 60*time.Second)
+			resp.Body.Close()
+			log.Warn().Str("provider", active.impl.Name()).Msg("key rate-limited (429), rotating to next key")
+			continue
+		}
+		return resp, err
+	}
+	return resp, err
+}
+
+// callUpstreamOnce performs a single upstream request with a specific API key.
+func (h *Handler) callUpstreamOnce(active *activeProvider, req AnthropicRequest, body []byte, origHeaders http.Header, key string) (*http.Response, error) {
 	if providers.IsOpenAICompatible(active.impl.Name()) {
 		oaiReq, err := TransformToOpenAI(req, active.impl.MapModel(req.Model))
 		if err != nil {
@@ -336,7 +417,7 @@ func (h *Handler) callUpstream(active *activeProvider, req AnthropicRequest, bod
 			return nil, err
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
-		h.authorize(active, httpReq, payload, active.apiKey)
+		h.authorize(active, httpReq, payload, key)
 		return h.httpClient.Do(httpReq)
 	}
 
@@ -353,9 +434,9 @@ func (h *Handler) callUpstream(active *activeProvider, req AnthropicRequest, bod
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	if _, ok := active.impl.(providers.Authorizer); ok {
-		h.authorize(active, httpReq, sendBody, active.apiKey)
+		h.authorize(active, httpReq, sendBody, key)
 	} else {
-		httpReq.Header.Set("x-api-key", h.resolveAnthropicKey(active, origHeaders))
+		httpReq.Header.Set("x-api-key", resolveAnthropicKeyFor(key, origHeaders))
 		httpReq.Header.Set("anthropic-version", "2023-06-01")
 		if v := origHeaders.Get("anthropic-beta"); v != "" {
 			httpReq.Header.Set("anthropic-beta", v)
@@ -476,11 +557,12 @@ func (h *Handler) relayAnthropicBuffered(w http.ResponseWriter, active *activePr
 		Msg("Request completed (anthropic-native)")
 }
 
-// resolveAnthropicKey picks the API key for an Anthropic forward: the configured
-// key if present, otherwise the client's key, otherwise the server's env key.
-func (h *Handler) resolveAnthropicKey(active *activeProvider, origHeaders http.Header) string {
-	if active != nil && active.apiKey != "" && active.apiKey != "nexus-local" {
-		return active.apiKey
+// resolveAnthropicKeyFor picks the API key for an Anthropic forward: the given
+// configured key if present, otherwise the client's key, otherwise the server's
+// env key.
+func resolveAnthropicKeyFor(configured string, origHeaders http.Header) string {
+	if configured != "" && configured != "nexus-local" {
+		return configured
 	}
 	key := extractAPIKey(origHeaders)
 	if key == "" || key == "nexus-local" {

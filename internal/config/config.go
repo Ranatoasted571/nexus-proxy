@@ -38,7 +38,11 @@ type Provider struct {
 	Name    string `toml:"name"`
 	Type    string `toml:"type,omitempty"`     // "openai-compatible" for a custom endpoint; empty = built-in by name
 	APIKey  string `toml:"api_key,omitempty"`  // literal, or "env:VAR_NAME" to read from the environment
-	BaseURL string `toml:"base_url,omitempty"` // required for custom/ollama providers
+	// APIKeys is an optional pool of keys for the same provider. NEXUS round-robins
+	// across them and skips any that hit a rate limit (429) — so multiple free-tier
+	// keys behave like one bigger free quota. Each may be literal or "env:VAR".
+	APIKeys []string `toml:"api_keys,omitempty"`
+	BaseURL string   `toml:"base_url,omitempty"` // required for custom/ollama providers
 	Models  []string `toml:"models,omitempty"`
 	Tier    string   `toml:"tier,omitempty"`
 

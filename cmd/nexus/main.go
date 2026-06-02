@@ -233,6 +233,19 @@ func runAdd(cmd *cobra.Command, args []string) error {
 
 	pc := config.Provider{Name: name, APIKey: apiKey, Type: flagAddType, BaseURL: flagAddBaseURL}
 
+	// A comma-separated key becomes a rotating key pool (free-tier load balancing).
+	if strings.Contains(apiKey, ",") {
+		var keys []string
+		for _, p := range strings.Split(apiKey, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				keys = append(keys, p)
+			}
+		}
+		pc.APIKeys = keys
+		pc.APIKey = ""
+		apiKey = ""
+	}
+
 	if flagAddType != "" {
 		// Custom / enterprise provider (openai-compatible, azure, vertex, bedrock).
 		pc.Region = flagAddRegion
@@ -266,6 +279,9 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	color.Green("✓ Added provider: %s (tier: %s)", name, pc.Tier)
+	if len(pc.APIKeys) > 1 {
+		color.White("  Key pool: %d keys (round-robin, 429 → next key)", len(pc.APIKeys))
+	}
 	color.White("  Config: %s", path)
 	return nil
 }
