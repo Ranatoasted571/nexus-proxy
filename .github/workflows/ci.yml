@@ -9,31 +9,43 @@ on:
 
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-          
+
+      # The dashboard is embedded from the committed internal/dashboard/dist, so
+      # the Go suite runs everywhere without Node. We still rebuild the web app on
+      # Linux to catch dashboard build breakage.
       - name: Set up Node.js
+        if: runner.os == 'Linux'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          
-      - name: Install web dependencies
-        run: cd web && npm ci
-        
+
       - name: Build web
-        run: make build-web
-        
-      - name: Run Go tests
+        if: runner.os == 'Linux'
+        run: cd web && npm ci && npm run build
+
+      - name: Run Go tests (Linux — race + coverage)
+        if: runner.os == 'Linux'
         run: go test ./... -race -coverprofile=coverage.out
-        
+
+      - name: Run Go tests (Windows)
+        if: runner.os == 'Windows'
+        run: go test ./...
+
       - name: Upload coverage
+        if: runner.os == 'Linux'
         uses: codecov/codecov-action@v4
 
   release:
