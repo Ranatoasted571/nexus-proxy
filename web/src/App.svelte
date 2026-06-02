@@ -2,9 +2,13 @@
   import { onMount, onDestroy } from 'svelte'
   import { Chart } from 'chart.js/auto'
   import {
-    connectSSE, disconnectSSE, fetchInitial, fetchTimeseries,
-    connected, stats, recentRequests, providers, providerBreakdown, timeseries,
+    connectSSE, disconnectSSE, fetchInitial, fetchTimeseries, fetchSavings,
+    connected, stats, recentRequests, providers, providerBreakdown, timeseries, savings,
   } from './stores/requests'
+
+  const REPO = 'https://github.com/lynuxis2026-pixel/nexus-proxy'
+  $: shareText = `I've saved $${$savings.saved_usd.toFixed(2)} on Claude Code with NEXUS 🚀 (${Math.round($savings.percent_saved)}% cheaper than Claude) — open-source smart LLM proxy`
+  $: shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(REPO)}`
 
   const PALETTE = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899', '#84cc16', '#a855f7', '#14b8a6']
 
@@ -46,7 +50,7 @@
       },
     })
 
-    poll = setInterval(fetchTimeseries, 10000)
+    poll = setInterval(() => { fetchTimeseries(); fetchSavings() }, 10000)
   })
 
   onDestroy(() => {
@@ -78,6 +82,19 @@
 </header>
 
 <main>
+  {#if $savings.saved_usd > 0}
+    <div class="savings">
+      <div class="savings-msg">
+        💸 You've saved <b>${$savings.saved_usd.toFixed(2)}</b> this month —
+        <b>{Math.round($savings.percent_saved)}%</b> cheaper than Claude
+      </div>
+      <div class="savings-actions">
+        <a class="btn" href={shareUrl} target="_blank" rel="noopener">Share on X</a>
+        <a class="btn ghost" href="/api/savings/card.svg" target="_blank" rel="noopener">Download card</a>
+      </div>
+    </div>
+  {/if}
+
   <div class="stats">
     <div class="card"><span class="num accent">{$stats.total_requests}</span><span class="label">requests today</span></div>
     <div class="card"><span class="num green">${$stats.total_cost_usd.toFixed(4)}</span><span class="label">cost today</span></div>
@@ -142,6 +159,22 @@
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
   main { max-width: 1100px; margin: 0 auto; padding: 20px 28px 40px; }
+
+  .savings {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    background: linear-gradient(90deg, rgba(124,58,237,0.16), rgba(6,182,212,0.12));
+    border: 1px solid #2a2150; border-radius: 10px; padding: 14px 18px; margin-bottom: 16px;
+  }
+  .savings-msg { font-size: 15px; color: #e2e8f0; }
+  .savings-msg b { color: #10b981; }
+  .savings-actions { display: flex; gap: 8px; }
+  .btn {
+    display: inline-block; padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    text-decoration: none; background: #7c3aed; color: #fff; border: 1px solid #7c3aed;
+  }
+  .btn:hover { background: #6d28d9; }
+  .btn.ghost { background: transparent; color: #94a3b8; border-color: #1a2035; }
+  .btn.ghost:hover { color: #e2e8f0; border-color: #2a2150; }
 
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
   .card { display: flex; flex-direction: column; gap: 4px; background: #0a0e1a; border: 1px solid #1a2035; border-radius: 8px; padding: 18px 20px; }

@@ -34,6 +34,15 @@ export interface TimeBucket {
   cost_usd: number
 }
 
+export interface Savings {
+  period: string
+  requests: number
+  actual_usd: number
+  baseline_usd: number
+  saved_usd: number
+  percent_saved: number
+}
+
 // Stores
 export const requests = writable<Request[]>([])
 export const stats = writable<Stats>({
@@ -45,6 +54,9 @@ export const stats = writable<Stats>({
 })
 export const providers = writable<ProviderStatus[]>([])
 export const timeseries = writable<TimeBucket[]>([])
+export const savings = writable<Savings>({
+  period: 'month', requests: 0, actual_usd: 0, baseline_usd: 0, saved_usd: 0, percent_saved: 0,
+})
 export const connected = writable(false)
 
 // Derived: last 100 requests
@@ -78,6 +90,7 @@ export async function fetchInitial(baseURL = '') {
     providers.set((p.providers ?? []) as ProviderStatus[])
   } catch {}
   await fetchTimeseries(baseURL)
+  await fetchSavings(baseURL)
 }
 
 // Fetch the cost/requests time series for the chart.
@@ -85,6 +98,13 @@ export async function fetchTimeseries(baseURL = '') {
   try {
     const d = await (await fetch(`${baseURL}/api/timeseries`)).json()
     timeseries.set((d.series ?? []) as TimeBucket[])
+  } catch {}
+}
+
+// Fetch the "saved vs. Claude" headline metric.
+export async function fetchSavings(baseURL = '') {
+  try {
+    savings.set(await (await fetch(`${baseURL}/api/savings?period=month`)).json() as Savings)
   } catch {}
 }
 

@@ -1,0 +1,396 @@
+package proxy
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"regexp"
+	"strconv"
+	"time"
+
+	"github.com/rs/zerolog/log"
+
+	"github.com/lynuxis2026-pixel/nexus-proxy/internal/providers"
+	"github.com/lynuxis2026-pixel/nexus-proxy/internal/router"
+)
+
+// HandleChatCompletions is the OpenAI-compatible inbound endpoint
+// (POST /v1/chat/completions). It lets ANY OpenAI-SDK client — Cursor, aider,
+// Continue, Cline, Zed, LangChain, … — route through NEXUS, not just Claude Code.
+func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		h.writeOpenAIError(w, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	defer r.Body.Close()
+
+	// Response cache: serve identical requests instantly (and free).
+	if h.cache != nil {
+		key := cacheKey("c", body)
+		if e, ok := h.cache.get(key); ok {
+			h.serveCached(w, e, startTime)
+			return
+		}
+		cw := newCachingWriter(w)
+		defer func() {
+			if cw.cacheable() {
+				e := cw.entry()
+				e.model = quickModel(body)
+				h.cache.set(key, e)
+			}
+		}()
+		w = cw
+	}
+
+	var oreq OpenAIRequest
+	if err := json.Unmarshal(body, &oreq); err != nil {
+		h.writeOpenAIError(w, http.StatusBadRequest, "invalid JSON in request body")
+		return
+	}
+	// Raw map preserves every field (temperature, top_p, …) for high-fidelity
+	// pass-through to OpenAI-compatible providers.
+	var rawMap map[string]interface{}
+	_ = json.Unmarshal(body, &rawMap)
+	var rawMsgs struct {
+		Messages []map[string]interface{} `json:"messages"`
+	}
+	_ = json.Unmarshal(body, &rawMsgs)
+
+	hasTools := len(oreq.Tools) > 0
+	complexity := router.ClassifyRequest(oreq.Model, rawMsgs.Messages, hasTools)
+	areq := TransformOpenAIToAnthropic(oreq) // internal form for Anthropic providers + logging
+
+	log.Debug().Str("model", oreq.Model).Str("complexity", complexity.String()).
+		Bool("stream", oreq.Stream).Bool("tools", hasTools).Msg("Incoming request (openai gateway)")
+
+	chain := h.router.RouteChain(oreq.Model, complexity)
+	if len(h.providers) == 0 || len(chain) == 0 {
+		h.writeOpenAIError(w, http.StatusBadGateway, "no providers configured — add one with `nexus add <provider> <key>`")
+		return
+	}
+	if h.budget.Over() {
+		if cheap := freeLocalOnly(chain); len(cheap) > 0 {
+			chain = cheap
+		}
+	}
+
+	for i, cand := range chain {
+		active := h.providers[cand.Name]
+		if active == nil {
+			continue
+		}
+
+		if providers.IsOpenAICompatible(active.impl.Name()) {
+			// High-fidelity pass-through: forward the original OpenAI body (model swapped).
+			resp, err := h.callOpenAIPassthrough(active, rawMap, oreq.Stream)
+			if err != nil {
+				log.Warn().Str("provider", cand.Name).Err(err).Msg("Provider unreachable, trying next")
+				continue
+			}
+			if isRetryableStatus(resp.StatusCode) && i < len(chain)-1 {
+				resp.Body.Close()
+				log.Warn().Str("provider", cand.Name).Int("status", resp.StatusCode).Msg("Retryable error, failing over")
+				continue
+			}
+			if oreq.Stream {
+				h.relayOpenAIPassthroughStream(w, active, areq, resp, startTime, complexity)
+			} else {
+				h.relayOpenAIPassthrough(w, active, areq, resp, startTime, complexity)
+			}
+			return
+		}
+
+		// Anthropic-format provider: convert OpenAI → Anthropic, then back to OpenAI.
+		abody, _ := json.Marshal(areq)
+		resp, err := h.callUpstream(active, areq, abody, r.Header)
+		if err != nil {
+			log.Warn().Str("provider", cand.Name).Err(err).Msg("Provider unreachable, trying next")
+			continue
+		}
+		if isRetryableStatus(resp.StatusCode) && i < len(chain)-1 {
+			resp.Body.Close()
+			continue
+		}
+		h.relayAnthropicToOpenAI(w, active, areq, oreq, resp, startTime, complexity)
+		return
+	}
+	h.writeOpenAIError(w, http.StatusBadGateway, "all providers unreachable")
+}
+
+// HandleModels serves GET /v1/models (some OpenAI clients query it on startup).
+func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
+	models := []map[string]interface{}{}
+	seen := map[string]bool{}
+	for _, id := range []string{"claude-opus-4-5", "claude-sonnet-4-6", "claude-haiku-4-5"} {
+		models = append(models, map[string]interface{}{"id": id, "object": "model", "owned_by": "nexus"})
+		seen[id] = true
+	}
+	writeJSONStatus(w, http.StatusOK, map[string]interface{}{"object": "list", "data": models})
+}
+
+// ─── upstream call (OpenAI pass-through) ────────────────────────────────────
+
+func (h *Handler) callOpenAIPassthrough(active *activeProvider, rawMap map[string]interface{}, stream bool) (*http.Response, error) {
+	m := make(map[string]interface{}, len(rawMap)+2)
+	for k, v := range rawMap {
+		m[k] = v
+	}
+	inModel, _ := rawMap["model"].(string)
+	m["model"] = active.impl.MapModel(inModel)
+	m["stream"] = stream
+	if stream {
+		m["stream_options"] = map[string]interface{}{"include_usage": true}
+	} else {
+		delete(m, "stream_options")
+	}
+	payload, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("POST", active.impl.ChatCompletionsURL(), bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	h.authorize(active, req, payload, active.apiKey)
+	return h.httpClient.Do(req)
+}
+
+// ─── relays (OpenAI out) ────────────────────────────────────────────────────
+
+func (h *Handler) relayOpenAIPassthrough(w http.ResponseWriter, active *activeProvider, areq AnthropicRequest, resp *http.Response, startTime time.Time, complexity router.Complexity) {
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	copyResponseHeaders(w.Header(), resp.Header)
+	w.Header().Set("X-Nexus-Provider", active.impl.Name())
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(respBody)
+
+	in, out := parseOpenAIUsage(respBody)
+	h.logResult(active, areq, complexity, in, out, resp.StatusCode, time.Since(startTime), false)
+	log.Info().Str("provider", active.impl.Name()).Int("status", resp.StatusCode).
+		Int("in", in).Int("out", out).Str("complexity", complexity.String()).Msg("Request completed (gateway)")
+}
+
+func (h *Handler) relayOpenAIPassthroughStream(w http.ResponseWriter, active *activeProvider, areq AnthropicRequest, resp *http.Response, startTime time.Time, complexity router.Complexity) {
+	defer resp.Body.Close()
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		h.writeOpenAIError(w, http.StatusInternalServerError, "streaming not supported by server")
+		return
+	}
+	copyResponseHeaders(w.Header(), resp.Header)
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "text/event-stream")
+	}
+	w.Header().Set("X-Nexus-Provider", active.impl.Name())
+	w.WriteHeader(resp.StatusCode)
+	flusher.Flush()
+
+	var captured bytes.Buffer
+	buf := make([]byte, 4096)
+	for {
+		n, readErr := resp.Body.Read(buf)
+		if n > 0 {
+			if _, werr := w.Write(buf[:n]); werr != nil {
+				return
+			}
+			flusher.Flush()
+			if captured.Len() < 1<<20 {
+				captured.Write(buf[:n])
+			}
+		}
+		if readErr != nil {
+			break
+		}
+	}
+	in, out := parseOpenAIUsage(captured.Bytes())
+	h.logResult(active, areq, complexity, in, out, resp.StatusCode, time.Since(startTime), true)
+	log.Info().Str("provider", active.impl.Name()).Int("in", in).Int("out", out).Bool("stream", true).Msg("Stream completed (gateway)")
+}
+
+// relayAnthropicToOpenAI converts an Anthropic provider response into OpenAI format.
+func (h *Handler) relayAnthropicToOpenAI(w http.ResponseWriter, active *activeProvider, areq AnthropicRequest, oreq OpenAIRequest, resp *http.Response, startTime time.Time, complexity router.Complexity) {
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Nexus-Provider", active.impl.Name())
+		w.WriteHeader(resp.StatusCode)
+		_, _ = w.Write(respBody)
+		h.logResult(active, areq, complexity, 0, 0, resp.StatusCode, time.Since(startTime), oreq.Stream)
+		return
+	}
+	var ar AnthropicResponse
+	_ = json.Unmarshal(respBody, &ar)
+	oaiResp := anthropicRespToOpenAIMap(ar, oreq.Model)
+	in, out := ar.Usage.InputTokens, ar.Usage.OutputTokens
+
+	if oreq.Stream {
+		writeOpenAISSE(w, active.impl.Name(), oaiResp)
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Nexus-Provider", active.impl.Name())
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(oaiResp)
+	}
+	h.logResult(active, areq, complexity, in, out, http.StatusOK, time.Since(startTime), oreq.Stream)
+	log.Info().Str("provider", active.impl.Name()).Int("in", in).Int("out", out).Bool("stream", oreq.Stream).Msg("Request completed (gateway→anthropic)")
+}
+
+// writeOpenAISSE synthesizes an OpenAI streaming response from a full response map.
+func writeOpenAISSE(w http.ResponseWriter, provider string, resp map[string]interface{}) {
+	w.Header().Set("X-Nexus-Provider", provider)
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+
+	id, _ := resp["id"].(string)
+	model, _ := resp["model"].(string)
+	var text string
+	finish := "stop"
+	if choices, ok := resp["choices"].([]map[string]interface{}); ok && len(choices) > 0 {
+		if msg, ok := choices[0]["message"].(map[string]interface{}); ok {
+			text, _ = msg["content"].(string)
+		}
+		if fr, ok := choices[0]["finish_reason"].(string); ok && fr != "" {
+			finish = fr
+		}
+	}
+	send := func(payload map[string]interface{}) {
+		b, _ := json.Marshal(payload)
+		fmt.Fprintf(w, "data: %s\n\n", b)
+		flusher.Flush()
+	}
+	chunk := func(delta map[string]interface{}, finishReason interface{}) map[string]interface{} {
+		return map[string]interface{}{
+			"id": id, "object": "chat.completion.chunk", "model": model,
+			"choices": []map[string]interface{}{{"index": 0, "delta": delta, "finish_reason": finishReason}},
+		}
+	}
+	send(chunk(map[string]interface{}{"role": "assistant"}, nil))
+	if text != "" {
+		send(chunk(map[string]interface{}{"content": text}, nil))
+	}
+	send(chunk(map[string]interface{}{}, finish))
+	fmt.Fprint(w, "data: [DONE]\n\n")
+	flusher.Flush()
+}
+
+func (h *Handler) writeOpenAIError(w http.ResponseWriter, status int, message string) {
+	writeJSONStatus(w, status, map[string]interface{}{
+		"error": map[string]interface{}{"message": message, "type": "nexus_error"},
+	})
+}
+
+func writeJSONStatus(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(data)
+}
+
+// ─── transforms ─────────────────────────────────────────────────────────────
+
+// TransformOpenAIToAnthropic converts an inbound OpenAI request to the internal
+// Anthropic request shape (used for Anthropic providers + classification/logging).
+func TransformOpenAIToAnthropic(o OpenAIRequest) AnthropicRequest {
+	ar := AnthropicRequest{Model: o.Model, MaxTokens: o.MaxTokens, Stream: o.Stream}
+	if ar.MaxTokens == 0 {
+		ar.MaxTokens = 4096
+	}
+	var sys string
+	for _, m := range o.Messages {
+		if m.Role == "system" {
+			sys += m.Content
+			continue
+		}
+		ar.Messages = append(ar.Messages, Message{Role: m.Role, Content: m.Content})
+	}
+	if sys != "" {
+		ar.System = sys
+	}
+	for _, t := range o.Tools {
+		ar.Tools = append(ar.Tools, map[string]interface{}{
+			"name": t.Function.Name, "description": t.Function.Description, "input_schema": t.Function.Parameters,
+		})
+	}
+	return ar
+}
+
+// anthropicRespToOpenAIMap converts an Anthropic response to an OpenAI response map.
+func anthropicRespToOpenAIMap(a AnthropicResponse, model string) map[string]interface{} {
+	msg := map[string]interface{}{"role": "assistant"}
+	var content string
+	var toolCalls []map[string]interface{}
+	for _, b := range a.Content {
+		switch b.Type {
+		case "text":
+			content += b.Text
+		case "tool_use":
+			args, _ := json.Marshal(b.Input)
+			toolCalls = append(toolCalls, map[string]interface{}{
+				"id": b.ID, "type": "function",
+				"function": map[string]interface{}{"name": b.Name, "arguments": string(args)},
+			})
+		}
+	}
+	msg["content"] = content
+	if len(toolCalls) > 0 {
+		msg["tool_calls"] = toolCalls
+	}
+	id := a.ID
+	if id == "" {
+		id = "chatcmpl-nexus"
+	}
+	return map[string]interface{}{
+		"id": "chatcmpl-" + id, "object": "chat.completion", "model": model,
+		"choices": []map[string]interface{}{{
+			"index": 0, "message": msg, "finish_reason": anthropicStopToOpenAI(a.StopReason),
+		}},
+		"usage": map[string]interface{}{
+			"prompt_tokens": a.Usage.InputTokens, "completion_tokens": a.Usage.OutputTokens,
+			"total_tokens": a.Usage.InputTokens + a.Usage.OutputTokens,
+		},
+	}
+}
+
+func anthropicStopToOpenAI(reason string) string {
+	switch reason {
+	case "end_turn", "stop_sequence":
+		return "stop"
+	case "max_tokens":
+		return "length"
+	case "tool_use":
+		return "tool_calls"
+	default:
+		return "stop"
+	}
+}
+
+var (
+	reOAIPrompt     = regexp.MustCompile(`"prompt_tokens":\s*(\d+)`)
+	reOAICompletion = regexp.MustCompile(`"completion_tokens":\s*(\d+)`)
+)
+
+func parseOpenAIUsage(data []byte) (in, out int) {
+	if m := reOAIPrompt.FindSubmatch(data); m != nil {
+		in, _ = strconv.Atoi(string(m[1]))
+	}
+	if all := reOAICompletion.FindAllSubmatch(data, -1); len(all) > 0 {
+		out, _ = strconv.Atoi(string(all[len(all)-1][1]))
+	}
+	return in, out
+}

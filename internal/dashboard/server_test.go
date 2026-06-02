@@ -4,11 +4,46 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/lynuxis2026-pixel/nexus-proxy/internal/storage"
 )
+
+func TestDashboardSavings(t *testing.T) {
+	db, err := storage.New(filepath.Join(t.TempDir(), "s.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	// Sonnet-asked, routed free at $0 → big savings.
+	_, _ = db.LogRequest(&storage.Request{
+		CreatedAt: time.Now(), Provider: "groq", ModelAsked: "claude-sonnet-4-6", ModelUsed: "llama",
+		Complexity: "standard", InputTokens: 1_000_000, OutputTokens: 1_000_000, CostUSD: 0, Status: 200,
+	})
+	s := &Server{db: db}
+
+	rec := httptest.NewRecorder()
+	s.handleSavings(rec, httptest.NewRequest("GET", "/api/savings?period=today", nil))
+	var sv map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &sv); err != nil {
+		t.Fatalf("savings JSON: %v", err)
+	}
+	if saved, _ := sv["saved_usd"].(float64); saved < 17.9 {
+		t.Errorf("saved_usd = %v, want ~18", sv["saved_usd"])
+	}
+
+	rec = httptest.NewRecorder()
+	s.handleSavingsCard(rec, httptest.NewRequest("GET", "/api/savings/card.svg?period=today", nil))
+	if ct := rec.Header().Get("Content-Type"); ct != "image/svg+xml" {
+		t.Errorf("card Content-Type = %q, want image/svg+xml", ct)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "<svg") || !strings.Contains(body, "saved") || !strings.Contains(body, "nexus-proxy") {
+		t.Errorf("savings card missing expected content:\n%s", body)
+	}
+}
 
 func TestDashboardAPI(t *testing.T) {
 	db, err := storage.New(filepath.Join(t.TempDir(), "d.db"))

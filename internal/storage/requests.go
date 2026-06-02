@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -183,6 +184,75 @@ func (db *DB) GetHourlySeries() ([]TimeBucket, error) {
 		out = append(out, b)
 	}
 	return out, rows.Err()
+}
+
+// Savings compares actual spend to what the same traffic would have cost on
+// Anthropic Claude — the headline "you saved $X" metric.
+type Savings struct {
+	Period       string  `json:"period"`
+	Requests     int     `json:"requests"`
+	ActualUSD    float64 `json:"actual_usd"`
+	BaselineUSD  float64 `json:"baseline_usd"`
+	SavedUSD     float64 `json:"saved_usd"`
+	PercentSaved float64 `json:"percent_saved"`
+}
+
+// anthropicBaseline returns what a request would have cost on Claude, based on
+// the asked model (opus/haiku exact; everything else assumes Sonnet).
+func anthropicBaseline(model string, in, out int) float64 {
+	var ip, op float64
+	switch m := strings.ToLower(model); {
+	case strings.Contains(m, "opus"):
+		ip, op = 15.0, 75.0
+	case strings.Contains(m, "haiku"):
+		ip, op = 0.25, 1.25
+	default: // sonnet-equivalent
+		ip, op = 3.0, 15.0
+	}
+	return float64(in)/1_000_000*ip + float64(out)/1_000_000*op
+}
+
+func sinceClause(period string) string {
+	switch period {
+	case "week":
+		return "date('now', '-7 days')"
+	case "month":
+		return "date('now', '-30 days')"
+	default:
+		return "date('now')"
+	}
+}
+
+// GetSavings returns the actual vs. Claude-baseline cost for a period.
+func (db *DB) GetSavings(period string) (*Savings, error) {
+	q := fmt.Sprintf(`SELECT model_asked, input_tokens, output_tokens, cost_usd
+		FROM requests WHERE date(created_at) >= %s`, sinceClause(period))
+	rows, err := db.conn.Query(q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	s := &Savings{Period: period}
+	for rows.Next() {
+		var model string
+		var in, out int
+		var cost float64
+		if err := rows.Scan(&model, &in, &out, &cost); err != nil {
+			continue
+		}
+		s.Requests++
+		s.ActualUSD += cost
+		s.BaselineUSD += anthropicBaseline(model, in, out)
+	}
+	s.SavedUSD = s.BaselineUSD - s.ActualUSD
+	if s.SavedUSD < 0 {
+		s.SavedUSD = 0
+	}
+	if s.BaselineUSD > 0 {
+		s.PercentSaved = s.SavedUSD / s.BaselineUSD * 100
+	}
+	return s, rows.Err()
 }
 
 // GetComplexityBreakdown returns request counts grouped by complexity.

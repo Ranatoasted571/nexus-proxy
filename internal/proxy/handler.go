@@ -39,6 +39,7 @@ type Handler struct {
 	db         *storage.DB
 	broker     EventPublisher // may be nil
 	budget     *budgetTracker
+	cache      *responseCache // may be nil (disabled)
 	stopHealth chan struct{}
 }
 
@@ -101,6 +102,10 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 		budget:     newBudgetTracker(budgetLimit, spentToday),
 		stopHealth: make(chan struct{}),
 	}
+	if !cfg.DisableCache {
+		h.cache = newResponseCache(5*time.Minute, 500)
+		log.Info().Msg("Response cache enabled (5m TTL) — identical requests served instantly & free")
+	}
 
 	if len(active) == 0 {
 		log.Info().Msg("No providers configured — zero-config mode (forwarding directly to Anthropic)")
@@ -161,6 +166,24 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
+
+	// Response cache: serve identical requests instantly (and free).
+	if h.cache != nil {
+		key := cacheKey("m", body)
+		if e, ok := h.cache.get(key); ok {
+			h.serveCached(w, e, startTime)
+			return
+		}
+		cw := newCachingWriter(w)
+		defer func() {
+			if cw.cacheable() {
+				e := cw.entry()
+				e.model = quickModel(body)
+				h.cache.set(key, e)
+			}
+		}()
+		w = cw
+	}
 
 	var req AnthropicRequest
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -478,6 +501,42 @@ func (h *Handler) publishStats() {
 		"forecast_usd":   forecast,
 		"avg_latency_ms": stats.AvgLatencyMS,
 	})
+}
+
+// serveCached writes a cached response and logs it as a (free, instant) cache hit.
+func (h *Handler) serveCached(w http.ResponseWriter, e cacheEntry, start time.Time) {
+	if e.ctype != "" {
+		w.Header().Set("Content-Type", e.ctype)
+	}
+	w.Header().Set("X-Nexus-Provider", "cache")
+	w.Header().Set("X-Nexus-Cache", "HIT")
+	w.WriteHeader(e.status)
+	_, _ = w.Write(e.body)
+
+	latency := time.Since(start)
+	if h.db != nil {
+		_, _ = h.db.LogRequest(&storage.Request{
+			CreatedAt: time.Now(), Provider: "cache",
+			ModelAsked: orStr(e.model, "cache"), ModelUsed: "cache", Complexity: "cached",
+			InputTokens: e.in, OutputTokens: e.out, CostUSD: 0, LatencyMS: latency.Milliseconds(), Status: e.status,
+		})
+	}
+	if h.broker != nil {
+		h.broker.Publish("request", requestEvent{
+			Provider: "cache", ModelAsked: orStr(e.model, "—"), ModelUsed: "cache", Complexity: "cached",
+			InputTokens: e.in, OutputTokens: e.out, CostUSD: 0, LatencyMS: latency.Milliseconds(),
+			Status: e.status, Timestamp: time.Now().Format(time.RFC3339),
+		})
+		h.publishStats()
+	}
+	log.Info().Int64("latency_ms", latency.Milliseconds()).Int("in", e.in).Int("out", e.out).Msg("Cache hit ⚡ (free)")
+}
+
+func orStr(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
 }
 
 // writeError writes a JSON error response in Anthropic's error shape.

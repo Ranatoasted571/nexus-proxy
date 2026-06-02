@@ -19,6 +19,7 @@ type Config struct {
 	LogLevel       string
 	ConfigPath     string
 	DailyBudgetUSD float64 // overrides config.toml routing.daily_budget_usd when > 0
+	DisableCache   bool    // turn off the response cache
 }
 
 // Server is the main proxy server
@@ -51,6 +52,10 @@ func New(cfg *Config, db *storage.DB, broker EventPublisher) (*Server, error) {
 func (s *Server) registerRoutes() {
 	// Main Anthropic API endpoint — Claude Code uses this
 	s.router.HandleFunc("/v1/messages", s.handler.HandleMessages).Methods("POST")
+
+	// OpenAI-compatible gateway — Cursor, aider, Continue, Cline, any OpenAI SDK app
+	s.router.HandleFunc("/v1/chat/completions", s.handler.HandleChatCompletions).Methods("POST")
+	s.router.HandleFunc("/v1/models", s.handler.HandleModels).Methods("GET")
 
 	// Health check
 	s.router.HandleFunc("/health", s.handleHealth).Methods("GET")

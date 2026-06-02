@@ -118,6 +118,7 @@ var (
 	flagAddProject    string
 	flagAddAPIVersion string
 	flagBudget        float64
+	flagNoCache       bool
 )
 
 func init() {
@@ -127,6 +128,7 @@ func init() {
 	startCmd.Flags().BoolVar(&flagNoUI, "no-ui", false, "Disable dashboard")
 	startCmd.Flags().StringVarP(&flagLogLevel, "log", "l", "info", "Log level (debug|info|warn|error)")
 	startCmd.Flags().Float64Var(&flagBudget, "budget", 0, "Daily budget cap in USD (0 = unlimited; free/local only once exceeded)")
+	startCmd.Flags().BoolVar(&flagNoCache, "no-cache", false, "Disable the response cache")
 
 	addCmd.Flags().StringVar(&flagAddType, "type", "", "Provider type: openai-compatible | azure | vertex | bedrock")
 	addCmd.Flags().StringVar(&flagAddBaseURL, "base-url", "", "Base URL (custom/azure endpoint; optional for ollama)")
@@ -173,6 +175,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		DashboardPort:  flagDashboardPort,
 		LogLevel:       flagLogLevel,
 		DailyBudgetUSD: flagBudget,
+		DisableCache:   flagNoCache,
 	}
 
 	proxySrv, err := proxy.New(cfg, db, broker)

@@ -71,6 +71,32 @@ func TestStatsToday(t *testing.T) {
 	}
 }
 
+func TestSavings(t *testing.T) {
+	db := newTestDB(t)
+	// A Sonnet-asked request that actually cost $0 (routed to a free provider),
+	// 1M input + 1M output → Claude baseline = $3 + $15 = $18.
+	if _, err := db.LogRequest(&Request{
+		CreatedAt: time.Now(), ModelAsked: "claude-sonnet-4-6", ModelUsed: "llama-3.3-70b-versatile",
+		Provider: "groq", Complexity: "standard", InputTokens: 1_000_000, OutputTokens: 1_000_000,
+		CostUSD: 0, Status: 200,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sv, err := db.GetSavings("today")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sv.BaselineUSD < 17.9 || sv.BaselineUSD > 18.1 {
+		t.Errorf("baseline = %v, want ~18", sv.BaselineUSD)
+	}
+	if sv.SavedUSD < 17.9 {
+		t.Errorf("saved = %v, want ~18", sv.SavedUSD)
+	}
+	if sv.PercentSaved < 99 {
+		t.Errorf("percent saved = %v, want ~100", sv.PercentSaved)
+	}
+}
+
 func TestProviderBreakdown(t *testing.T) {
 	db := newTestDB(t)
 	mk := func(p string) *Request {

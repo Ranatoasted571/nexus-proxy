@@ -1,7 +1,7 @@
 # NEXUS
 
-**Smart proxy + live dashboard for Claude Code.**  
-Route Claude Code requests to free/cheap LLMs automatically. Keep Claude for what matters.
+**Smart proxy + live dashboard for Claude Code — and every AI coding tool.**  
+Route Claude Code, Cursor, aider, and any OpenAI/Anthropic app to the cheapest capable LLM — automatically.
 
 <!-- Hero: record the live dashboard at http://localhost:2222 and save it as docs/dashboard.gif, then uncomment: -->
 <!-- ![NEXUS live dashboard](docs/dashboard.gif) -->
@@ -47,6 +47,32 @@ NEXUS sits between Claude Code and the providers — intelligently routing reque
 **Live dashboard** — beautiful real-time UI showing every request, cost, and provider. The first proxy that's actually pleasant to use.
 
 **Zero Claude Code changes** — one env var. That's it.
+
+**Universal gateway** — speaks both the Anthropic API (`/v1/messages`) and the OpenAI API (`/v1/chat/completions`), so Claude Code, Cursor, aider, Continue, Cline, Zed, and any OpenAI SDK app all route through one proxy.
+
+**Smart cache** — identical requests are served instantly and for free.
+
+**Shareable savings** — a live "you saved $X vs. Claude" card you can post anywhere.
+
+---
+
+## Use it with any tool
+
+NEXUS exposes **both** the Anthropic and OpenAI APIs, so point any client at it:
+
+```bash
+# Claude Code (Anthropic API)
+export ANTHROPIC_BASE_URL=http://localhost:3000
+export ANTHROPIC_API_KEY=nexus-local
+
+# Cursor / aider / Continue / Cline / any OpenAI SDK app (OpenAI API)
+export OPENAI_BASE_URL=http://localhost:3000/v1
+export OPENAI_API_KEY=nexus-local
+```
+
+Every request is classified and routed to the cheapest capable provider, cached
+when identical, and shown live on the dashboard with its cost. The dashboard's
+**Share** button posts your savings card to X in one click.
 
 ---
 

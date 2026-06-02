@@ -21,6 +21,23 @@
 
 ## Beslissingen Log
 
+### [2026-06] Drie wereld-impact features: gateway, cache, savings (→ v0.2.0)
+- **Universele gateway** (`gateway.go`): OpenAI-compatibel `POST /v1/chat/completions` + `GET /v1/models`
+  inbound. Hergebruikt classifier/router/providers. OpenAI-provider = high-fidelity passthrough
+  (incl. streaming via raw-body model-swap); Anthropic-provider = OpenAI→Anthropic→OpenAI conversie
+  (`TransformOpenAIToAnthropic`, `anthropicRespToOpenAIMap`, `writeOpenAISSE`). Maakt NEXUS bruikbaar
+  voor Cursor, aider, Continue, Cline, Zed, élke OpenAI-SDK-app — niet alleen Claude Code.
+- **Smart cache** (`cache.go`): genormaliseerde request-hash (canonieke JSON) → in-memory TTL(5m)+FIFO(500).
+  Eén `cachingWriter` tee't de response, werkt voor /v1/messages én /v1/chat/completions, replay = bytes
+  verbatim (stream of JSON). Default aan; `--no-cache`. Cache-hits loggen als provider "cache" ($0, ⚡).
+- **Deelbare savings** (`storage.GetSavings` + `/api/savings` + `/api/savings/card.svg`): baseline =
+  Claude-prijs voor het gevraagde model (opus/haiku exact, rest sonnet); saved = baseline − actual.
+  SVG-kaart (640×360) + dashboard-banner met "Share on X" (prefilled tweet + repo) + "Download card".
+- **Tests**: gateway (passthrough/stream/anthropic-convert/models/transform), cache (hit + normalisatie),
+  savings (storage + dashboard + SVG). 57 testfuncties, alles groen, 5 platforms cross-compile.
+- Live geverifieerd op de echte binary: /v1/models, /api/savings, /api/savings/card.svg (image/svg+xml),
+  dashboard met banner.
+
 ### [2026-06] Bedrock/Vertex kosteloos testbaar (base_url override)
 - Probleem: Bedrock/Vertex hadden hun endpoint hardgecodeerd → niet te testen zonder
   betaald cloud-account. Opgelost: optionele `base_url` override op beide (default blijft
