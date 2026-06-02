@@ -42,20 +42,25 @@ Please add tests for new behavior. The core logic packages
 | Path | What |
 |------|------|
 | `cmd/nexus` | CLI entrypoint (cobra) |
-| `internal/proxy` | HTTP proxy, request handler, format conversion, streaming |
-| `internal/router` | task classifier + routing strategies |
-| `internal/providers` | provider implementations (Anthropic, DeepSeek, Groq, Gemini, Ollama) |
-| `internal/storage` | SQLite logging + stats |
-| `internal/dashboard` | dashboard server, SSE broker, embedded UI |
-| `web/` | Svelte dashboard source |
+| `internal/proxy` | HTTP servers + the request pipeline: handler, gateway (OpenAI inbound), transformer, streaming, cascade, privacy firewall, semantic cache, rules, usage |
+| `internal/router` | task classifier, routing strategies, cheap-first cascade chain, adaptive learned ordering |
+| `internal/providers` | the `Provider` interface + 24 built-ins, a config-driven generic provider, enterprise providers (Azure/Vertex/Bedrock + SigV4), cache-aware + off-peak pricing |
+| `internal/storage` | pure-Go SQLite: request log, stats, savings, leaderboard, detail |
+| `internal/dashboard` | dashboard server, SSE broker, JSON API, embedded Svelte build |
+| `internal/config` | TOML config, `env:` key resolution, env auto-discovery |
+| `web/` | Svelte dashboard source (rebuilt + re-embedded by `make build`) |
+
+See **[docs/architecture.md](docs/architecture.md)** for the full request pipeline.
 
 ## Areas that need help
 
-- More provider integrations (Mistral, Together AI, OpenRouter, Cohere)
-- Token-by-token streaming for OpenAI-compatible providers
-- Smarter complexity classification
-- Dashboard components & charts
-- Windows testing
+- More provider integrations + keeping model maps / pricing current
+- Smarter complexity classification (the classifier is intentionally simple)
+- A stronger quality signal for `nexus bench` (today's "agreement" is a local
+  word-cosine proxy — an optional local cross-encoder/judge would be great)
+- More privacy-firewall detectors (secret shapes, languages)
+- Dashboard components & charts; more MCP tools
+- Testing on more platforms / more real providers
 
 ## Pull requests
 
