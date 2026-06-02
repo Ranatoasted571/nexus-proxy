@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" font-family="Inter,-apple-system,Segoe UI,sans-serif">
+  <defs>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c3aed" stop-opacity="0.18"/><stop offset="1" stop-color="#06b6d4" stop-opacity="0.05"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="380" fill="#050816"/>
+  <rect width="1200" height="380" fill="url(#glow)"/>
+  <rect width="1200" height="7" fill="url(#bar)"/>
+
+  <text x="64" y="118" font-size="66" font-weight="800" letter-spacing="-2" fill="#7c3aed">NE<tspan fill="#06b6d4">X</tspan>US</text>
+  <text x="64" y="166" font-size="24" fill="#e2e8f0" font-weight="600">One proxy. Every AI coding tool. The cheapest capable model — every time.</text>
+  <text x="64" y="200" font-size="16" fill="#64748b">Single Go binary · zero config · live cost dashboard</text>
+
+  <!-- feature pills -->
+  <g font-size="16" font-weight="600">
+    <rect x="64" y="236" width="232" height="40" rx="20" fill="#0a0e1a" stroke="#1a2035"/>
+    <text x="84" y="262" fill="#06b6d4">⚡ 24+ providers built in</text>
+    <rect x="312" y="236" width="320" height="40" rx="20" fill="#0a0e1a" stroke="#1a2035"/>
+    <text x="332" y="262" fill="#e2e8f0">Claude Code · Cursor · aider · any OpenAI app</text>
+    <rect x="648" y="236" width="210" height="40" rx="20" fill="#0a0e1a" stroke="#1a2035"/>
+    <text x="668" y="262" fill="#10b981">smart cache · auto-failover</text>
+  </g>
+
+  <!-- savings callout -->
+  <g>
+    <text x="64" y="332" font-size="18" fill="#94a3b8">Typical Claude Code spend</text>
+    <text x="360" y="332" font-size="22" font-weight="700" fill="#ef4444">~$120/mo</text>
+    <text x="500" y="332" font-size="22" fill="#64748b">→</text>
+    <text x="540" y="332" font-size="22" font-weight="800" fill="#10b981">~$8/mo with NEXUS</text>
+  </g>
+
+  <text x="1136" y="356" text-anchor="end" font-size="13" fill="#475569">github.com/lynuxis2026-pixel/nexus-proxy</text>
+</svg>

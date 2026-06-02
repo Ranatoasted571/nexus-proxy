@@ -1,15 +1,23 @@
 # NEXUS
 
+![NEXUS — smart proxy for Claude Code and every AI coding tool](docs/hero.svg)
+
 **Smart proxy + live dashboard for Claude Code — and every AI coding tool.**  
 Route Claude Code, Cursor, aider, and any OpenAI/Anthropic app to the cheapest capable LLM — automatically.
 
-<!-- Hero: record the live dashboard at http://localhost:2222 and save it as docs/dashboard.gif, then uncomment: -->
-<!-- ![NEXUS live dashboard](docs/dashboard.gif) -->
+[![Release](https://img.shields.io/github/v/release/lynuxis2026-pixel/nexus-proxy?color=7c3aed)](https://github.com/lynuxis2026-pixel/nexus-proxy/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/lynuxis2026-pixel/nexus-proxy/ci.yml?branch=main&label=CI)](https://github.com/lynuxis2026-pixel/nexus-proxy/actions)
+[![License: MIT](https://img.shields.io/github/license/lynuxis2026-pixel/nexus-proxy?color=06b6d4)](LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/lynuxis2026-pixel/nexus-proxy)](go.mod)
+[![Stars](https://img.shields.io/github/stars/lynuxis2026-pixel/nexus-proxy?style=social)](https://github.com/lynuxis2026-pixel/nexus-proxy/stargazers)
 
 ```bash
-curl -fsSL https://get.nexus.sh | sh
+curl -fsSL https://raw.githubusercontent.com/lynuxis2026-pixel/nexus-proxy/main/install.sh | sh
 nexus start
 ```
+
+> A dashboard GIF makes the best hero — record `http://localhost:2222`, save it as
+> `docs/dashboard.gif`, and swap the banner above for it.
 
 > **NEXUS is running**  
 > Proxy: http://localhost:3000  
