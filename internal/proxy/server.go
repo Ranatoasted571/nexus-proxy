@@ -23,6 +23,7 @@ type Config struct {
 	SemanticCache  bool    // enable near-match (semantic) response caching
 	SemanticThreshold float64 // cosine threshold for semantic cache (0 ⇒ 0.95)
 	Cascade        bool    // cheap-first cascade with verification
+	Redact         bool    // privacy firewall: mask secrets/PII before forwarding
 }
 
 // Server is the main proxy server

@@ -29,6 +29,14 @@ func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) 
 	}
 	defer r.Body.Close()
 
+	// Privacy firewall: mask secrets/PII before anything downstream sees the body.
+	var restoreMap map[string]string
+	if h.firewall != nil {
+		if red, m := h.firewall.redact(body); len(m) > 0 {
+			body, restoreMap = red, m
+		}
+	}
+
 	// Response cache: serve identical requests instantly (and free).
 	if h.cache != nil {
 		key := cacheKey("c", body)
@@ -61,6 +69,12 @@ func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) 
 			}
 		}()
 		w = cw
+	}
+
+	if restoreMap != nil {
+		rw := newRestoringWriter(w, restoreMap)
+		defer rw.flush()
+		w = rw
 	}
 
 	var oreq OpenAIRequest

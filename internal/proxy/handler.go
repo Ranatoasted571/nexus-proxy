@@ -80,6 +80,7 @@ type Handler struct {
 	budget     *budgetTracker
 	cache      *responseCache // may be nil (disabled)
 	cascade    bool           // cheap-first cascade with verification
+	firewall   *redactor      // privacy firewall (nil = off)
 	stopHealth chan struct{}
 }
 
@@ -157,6 +158,10 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 	}
 
 	h.cascade = cfg.Cascade || appCfg.Routing.Cascade
+	if cfg.Redact || appCfg.Routing.Redact {
+		h.firewall = &redactor{}
+		log.Info().Msg("Privacy firewall enabled — secrets/PII are masked before leaving for any provider")
+	}
 
 	if len(active) == 0 {
 		log.Info().Msg("No providers configured — zero-config mode (forwarding directly to Anthropic)")
@@ -227,6 +232,16 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
+	// Privacy firewall: mask secrets/PII before anything downstream (cache key,
+	// classification, upstream) sees the body. Originals are restored in the
+	// response by a restoringWriter wrapped around w below.
+	var restoreMap map[string]string
+	if h.firewall != nil {
+		if red, m := h.firewall.redact(body); len(m) > 0 {
+			body, restoreMap = red, m
+		}
+	}
+
 	// Response cache: serve identical requests instantly (and free).
 	if h.cache != nil {
 		key := cacheKey("m", body)
@@ -259,6 +274,14 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 		w = cw
+	}
+
+	// Restore masked secrets/PII in the response (outermost wrapper so the cache
+	// stores the restored bytes too).
+	if restoreMap != nil {
+		rw := newRestoringWriter(w, restoreMap)
+		defer rw.flush()
+		w = rw
 	}
 
 	var req AnthropicRequest

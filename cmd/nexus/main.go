@@ -122,6 +122,7 @@ var (
 	flagSemanticCache     bool
 	flagSemanticThreshold float64
 	flagCascade           bool
+	flagRedact            bool
 )
 
 func init() {
@@ -135,6 +136,7 @@ func init() {
 	startCmd.Flags().BoolVar(&flagSemanticCache, "semantic-cache", false, "Serve near-identical tool-less requests from cache (local embedding match)")
 	startCmd.Flags().Float64Var(&flagSemanticThreshold, "semantic-threshold", 0, "Cosine threshold for the semantic cache (default 0.95)")
 	startCmd.Flags().BoolVar(&flagCascade, "cascade", false, "Cheap-first cascade: try the cheapest capable model, verify, escalate on failure")
+	startCmd.Flags().BoolVar(&flagRedact, "redact", false, "Privacy firewall: mask secrets/API keys/PII before forwarding to any provider")
 
 	addCmd.Flags().StringVar(&flagAddType, "type", "", "Provider type: openai-compatible | azure | vertex | bedrock")
 	addCmd.Flags().StringVar(&flagAddBaseURL, "base-url", "", "Base URL (custom/azure endpoint; optional for ollama)")
@@ -185,6 +187,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		SemanticCache:     flagSemanticCache,
 		SemanticThreshold: flagSemanticThreshold,
 		Cascade:           flagCascade,
+		Redact:            flagRedact,
 	}
 
 	proxySrv, err := proxy.New(cfg, db, broker)
