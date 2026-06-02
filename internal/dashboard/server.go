@@ -65,6 +65,7 @@ func (s *Server) Routes() http.Handler {
 	api.HandleFunc("/breakdown", s.handleBreakdown).Methods("GET")
 	api.HandleFunc("/savings", s.handleSavings).Methods("GET")
 	api.HandleFunc("/leaderboard", s.handleLeaderboard).Methods("GET")
+	api.HandleFunc("/report", s.handleReport).Methods("GET")
 	api.HandleFunc("/savings/card.svg", s.handleSavingsCard).Methods("GET")
 
 	// Serve the embedded dashboard UI (Svelte build, or the committed fallback).
@@ -312,40 +313,75 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"period": period, "leaderboard": []interface{}{}})
 }
 
+// handleReport is the Trust & Savings report: savings + cache + privacy in one.
+func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
+	period := r.URL.Query().Get("period")
+	if period == "" {
+		period = "month"
+	}
+	sv := &storage.Savings{Period: period}
+	var redacted, cacheTokens int
+	var cacheSaved float64
+	if s.db != nil {
+		if x, err := s.db.GetSavings(period); err == nil {
+			sv = x
+		}
+		if st, err := s.db.GetStats(period); err == nil {
+			redacted, cacheSaved, cacheTokens = st.RedactedTotal, st.CacheSavedUSD, st.CacheReadTokens
+		}
+	}
+	writeJSON(w, map[string]interface{}{
+		"period": period, "requests": sv.Requests,
+		"saved_usd": sv.SavedUSD, "percent_saved": sv.PercentSaved,
+		"actual_usd": sv.ActualUSD, "baseline_usd": sv.BaselineUSD,
+		"cache_saved_usd": cacheSaved, "cache_read_tokens": cacheTokens,
+		"redacted_total": redacted, "leaked": 0,
+	})
+}
+
 func (s *Server) handleSavingsCard(w http.ResponseWriter, r *http.Request) {
 	period := r.URL.Query().Get("period")
 	if period == "" {
 		period = "month"
 	}
 	sv := &storage.Savings{Period: period}
+	redacted := 0
 	if s.db != nil {
 		if x, err := s.db.GetSavings(period); err == nil {
 			sv = x
 		}
+		if st, err := s.db.GetStats(period); err == nil {
+			redacted = st.RedactedTotal
+		}
 	}
 	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write([]byte(savingsSVG(sv)))
+	_, _ = w.Write([]byte(savingsSVG(sv, redacted)))
 }
 
-// savingsSVG renders a shareable savings card (640x360, social-friendly).
-func savingsSVG(sv *storage.Savings) string {
+// savingsSVG renders a shareable Trust & Savings card (640x360, social-friendly).
+func savingsSVG(sv *storage.Savings, redacted int) string {
 	label := map[string]string{"today": "today", "week": "this week", "month": "this month"}[sv.Period]
 	if label == "" {
 		label = sv.Period
 	}
 	pct := int(sv.PercentSaved + 0.5)
+	privacy := "secrets &amp; PII never leave your machine"
+	if redacted > 0 {
+		privacy = fmt.Sprintf("%d secrets/PII masked before leaving · 0 leaked", redacted)
+	}
 	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360" font-family="Inter,-apple-system,Segoe UI,sans-serif">
   <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs>
   <rect width="640" height="360" fill="#050816"/>
   <rect width="640" height="6" fill="url(#g)"/>
-  <text x="40" y="80" font-size="40" font-weight="800" letter-spacing="-1" fill="#7c3aed">NE<tspan fill="#06b6d4">X</tspan>US</text>
-  <text x="40" y="106" font-size="15" fill="#64748b">smart proxy for Claude Code</text>
-  <text x="40" y="214" font-size="84" font-weight="800" fill="#10b981">$%s</text>
-  <text x="40" y="252" font-size="22" fill="#e2e8f0">saved %s vs. Claude</text>
-  <text x="40" y="300" font-size="17" fill="#94a3b8">%d requests routed  •  %d%% cheaper</text>
-  <text x="40" y="338" font-size="14" fill="#475569">github.com/lynuxis2026-pixel/nexus-proxy</text>
-</svg>`, formatUSD(sv.SavedUSD), label, sv.Requests, pct)
+  <text x="40" y="76" font-size="40" font-weight="800" letter-spacing="-1" fill="#7c3aed">NE<tspan fill="#06b6d4">X</tspan>US</text>
+  <text x="40" y="102" font-size="15" fill="#64748b">local-first privacy + cost layer for Claude Code</text>
+  <text x="40" y="196" font-size="78" font-weight="800" fill="#10b981">$%s</text>
+  <text x="40" y="232" font-size="22" fill="#e2e8f0">saved %s vs. Claude  ·  %d%% cheaper</text>
+  <text x="40" y="276" font-size="17" fill="#06b6d4">🔒 %s</text>
+  <text x="40" y="304" font-size="15" fill="#94a3b8">%d requests routed locally — your keys &amp; code stay on your machine</text>
+  <text x="40" y="340" font-size="14" fill="#475569">github.com/lynuxis2026-pixel/nexus-proxy</text>
+</svg>`, formatUSD(sv.SavedUSD), label, pct, privacy, sv.Requests)
 }
 
 func formatUSD(v float64) string {

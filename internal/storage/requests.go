@@ -30,6 +30,7 @@ type Request struct {
 	Prompt           string // full request JSON — only stored when --inspect is on
 	Response         string // full response body — only stored when --inspect is on
 	User             string // team attribution (empty = unattributed)
+	Redacted         int    // secrets/PII masked before this request left the machine
 }
 
 // LogRequest saves a request to the database and returns the new row ID.
@@ -40,8 +41,8 @@ func (db *DB) LogRequest(req *Request) (int64, error) {
 			provider, complexity, input_tokens, output_tokens,
 			cache_read_tokens, cache_write_tokens,
 			cost_usd, cache_saved_usd, latency_ms, status, error, stream,
-			prompt, response, user
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			prompt, response, user, redacted
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		// Store as SQLite-native UTC datetime text so date()/strftime() work.
 		req.CreatedAt.UTC().Format("2006-01-02 15:04:05"),
 		req.RequestID,
@@ -62,6 +63,7 @@ func (db *DB) LogRequest(req *Request) (int64, error) {
 		req.Prompt,
 		req.Response,
 		req.User,
+		req.Redacted,
 	)
 	if err != nil {
 		return 0, err
@@ -132,7 +134,8 @@ func (db *DB) GetStats(period string) (*Stats, error) {
 			COALESCE(AVG(latency_ms), 0) as avg_latency,
 			COALESCE(SUM(cache_read_tokens), 0) as cache_read_tokens,
 			COALESCE(SUM(cache_write_tokens), 0) as cache_write_tokens,
-			COALESCE(SUM(cache_saved_usd), 0) as cache_saved_usd
+			COALESCE(SUM(cache_saved_usd), 0) as cache_saved_usd,
+			COALESCE(SUM(redacted), 0) as redacted_total
 		FROM requests
 		WHERE date(created_at) >= %s`, since)
 
@@ -146,6 +149,7 @@ func (db *DB) GetStats(period string) (*Stats, error) {
 		&stats.CacheReadTokens,
 		&stats.CacheWriteTokens,
 		&stats.CacheSavedUSD,
+		&stats.RedactedTotal,
 	)
 	if err != nil {
 		return nil, err
@@ -401,6 +405,7 @@ type Stats struct {
 	CacheReadTokens   int     `json:"cache_read_tokens"`
 	CacheWriteTokens  int     `json:"cache_write_tokens"`
 	CacheSavedUSD     float64 `json:"cache_saved_usd"`
+	RedactedTotal     int     `json:"redacted_total"`
 }
 
 type ProviderStats struct {

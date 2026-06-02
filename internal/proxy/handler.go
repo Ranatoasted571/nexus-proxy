@@ -343,6 +343,7 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.nexusUser = user
+	req.nexusRedacted = len(restoreMap)
 
 	// Parse messages as raw maps for the classifier.
 	var raw struct {
@@ -717,6 +718,7 @@ func (h *Handler) logResult(active *activeProvider, req AnthropicRequest, comple
 		Status:           status,
 		Stream:           stream,
 		User:             req.nexusUser,
+		Redacted:         req.nexusRedacted,
 	}
 	if h.inspect { // opt-in: capture full prompt + response for the inspector
 		if pj, err := json.Marshal(req); err == nil {
@@ -1018,8 +1020,9 @@ type AnthropicRequest struct {
 	MaxTokens int           `json:"max_tokens"`
 	Stream    bool          `json:"stream"`
 	System    interface{}   `json:"system,omitempty"`
-	Tools     []interface{} `json:"tools,omitempty"`
-	nexusUser string        // team attribution; derived per request, never serialized
+	Tools         []interface{} `json:"tools,omitempty"`
+	nexusUser     string        // team attribution; derived per request, never serialized
+	nexusRedacted int           // # secrets/PII the firewall masked; never serialized
 }
 
 // deriveUser attributes a request to a team member: the X-Nexus-User header, or

@@ -97,6 +97,7 @@ func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) 
 	complexity := router.ClassifyRequest(oreq.Model, rawMsgs.Messages, hasTools)
 	areq := TransformOpenAIToAnthropic(oreq) // internal form for Anthropic providers + logging
 	areq.nexusUser = user
+	areq.nexusRedacted = len(restoreMap)
 
 	log.Debug().Str("model", oreq.Model).Str("complexity", complexity.String()).
 		Bool("stream", oreq.Stream).Bool("tools", hasTools).Msg("Incoming request (openai gateway)")

@@ -186,7 +186,10 @@ func init() {
 	rootCmd.AddCommand(mcpCmd)
 	rootCmd.AddCommand(codeCmd)
 	rootCmd.AddCommand(benchCmd)
+	rootCmd.AddCommand(reportCmd)
 	rootCmd.AddCommand(versionCmd)
+
+	reportCmd.Flags().StringVar(&flagReportPeriod, "period", "month", "Period: today | week | month")
 
 	codeCmd.Flags().IntVar(&flagCodePort, "port", 3000, "Proxy port NEXUS should use")
 	benchCmd.Flags().IntVar(&flagBenchPort, "port", 3000, "Proxy port to benchmark against")

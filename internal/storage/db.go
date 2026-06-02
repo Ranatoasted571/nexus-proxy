@@ -112,7 +112,8 @@ func (db *DB) migrate() error {
 		`ALTER TABLE requests ADD COLUMN cache_saved_usd REAL DEFAULT 0`,
 		`ALTER TABLE requests ADD COLUMN prompt TEXT`,   // captured only when --inspect is on
 		`ALTER TABLE requests ADD COLUMN response TEXT`, // captured only when --inspect is on
-		`ALTER TABLE requests ADD COLUMN user TEXT`,     // team attribution (from X-Nexus-User / nexus-<name> key)
+		`ALTER TABLE requests ADD COLUMN user TEXT`,         // team attribution (from X-Nexus-User / nexus-<name> key)
+		`ALTER TABLE requests ADD COLUMN redacted INTEGER DEFAULT 0`, // secrets/PII masked by the privacy firewall
 	} {
 		_, _ = db.conn.Exec(stmt)
 	}
