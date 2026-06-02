@@ -55,7 +55,17 @@ NEXUS sits between Claude Code and the providers — intelligently routing reque
 
 **Universal gateway** — speaks both the Anthropic API (`/v1/messages`) and the OpenAI API (`/v1/chat/completions`), so Claude Code, Cursor, aider, Continue, Cline, Zed, and any OpenAI SDK app all route through one proxy.
 
-**Smart cache** — identical requests are served instantly and for free.
+**Cheap-first cascade** — optionally try the cheapest capable model first, verify
+its output, and escalate to Claude only when it fails. Real savings, with a safety net.
+
+**Smart cache** — identical requests are served instantly and for free; an opt-in
+semantic layer also serves near-identical tool-less prompts.
+
+**Cache-aware costs** — captures provider prompt-cache tokens and shows your true,
+cache-discounted spend (and a live "cache saved $X").
+
+**Free-tier key pools** — round-robin across multiple free keys with automatic
+429 cooldown, so free tiers behave like one big quota.
 
 **Shareable savings** — a live "you saved $X vs. Claude" card you can post anywhere.
 
@@ -140,6 +150,8 @@ nexus start --strategy cheapest  # always cheapest available
 nexus start --strategy fastest   # lowest latency
 nexus start --strategy manual    # explicit model mapping
 nexus start --budget 5           # cap spend at $5/day → free/local only when exceeded
+nexus start --cascade            # cheap-first: try cheapest, verify, escalate only on failure
+nexus start --semantic-cache     # serve near-identical tool-less requests from cache
 ```
 
 **Auto mode** classifies each request:
@@ -261,6 +273,64 @@ nexus start --budget 5        # or set routing.daily_budget_usd in config.toml
 
 Once today's spend hits the cap, NEXUS routes only to **free/local** providers
 for the rest of the day — premium models resume tomorrow.
+
+---
+
+## Squeeze costs even further
+
+Four extra layers that stack on top of routing — together they can cut the bill
+another **5–10×**:
+
+### 🪜 Cheap-first cascade
+
+```bash
+nexus start --cascade        # or routing.cascade = true
+```
+
+Instead of sending hard tasks straight to Claude, NEXUS tries the **cheapest
+capable model first**, verifies its output (non-empty answer + valid tool-call
+JSON), and **escalates to a stronger model only when the cheap one fails**.
+Most "standard" work succeeds on a free/cheap model; only the genuine failures
+cost premium money. Critical/security requests stay premium-first — never gambled
+on a weak model.
+
+### 🧠 Cache-aware cost tracking
+
+Agentic coding re-sends the same big prefix (system prompt + tools + project
+context) every turn. Providers cache it — Anthropic at 0.1×, DeepSeek/OpenAI
+similarly — and NEXUS now **captures those cache tokens** (`cache_read` /
+`cache_creation`, `prompt_cache_hit_tokens`, `cached_tokens`), prices them at the
+real discount, and shows a live **"cache saved $X"** number on the dashboard. You
+finally see your true (much lower) cost.
+
+### 🔁 Semantic + normalized cache
+
+```bash
+nexus start --semantic-cache [--semantic-threshold 0.95]
+```
+
+The response cache now ignores response-irrelevant fields (metadata,
+`cache_control` markers) so retries hit, and — opt-in — serves **near-identical
+tool-less requests** from cache using a local embedding match (no network, no
+deps). Tool calls are never served approximately.
+
+### 🗝️ Free-tier key pools
+
+```bash
+nexus add groq "key1,key2,key3"     # comma-separated → rotating pool
+```
+
+```toml
+[[providers]]
+name = "groq"
+api_keys = ["env:GROQ_KEY_1", "env:GROQ_KEY_2"]
+```
+
+Free tiers are rate-limited, not metered. NEXUS round-robins across a pool of
+keys and puts any key that returns `429` on a short cooldown — so several free
+keys behave like **one larger free quota**, and a lot more traffic stays at $0.
+
+---
 
 ### Enterprise providers (Azure, Bedrock, Vertex)
 

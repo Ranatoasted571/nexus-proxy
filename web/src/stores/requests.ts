@@ -20,6 +20,8 @@ export interface Stats {
   total_tokens: number
   forecast_usd: number
   avg_latency_ms: number
+  cache_saved_usd: number
+  cache_read_tokens: number
 }
 
 export interface ProviderStatus {
@@ -41,6 +43,7 @@ export interface Savings {
   baseline_usd: number
   saved_usd: number
   percent_saved: number
+  cache_saved_usd: number
 }
 
 // Stores
@@ -51,11 +54,13 @@ export const stats = writable<Stats>({
   total_tokens: 0,
   forecast_usd: 0,
   avg_latency_ms: 0,
+  cache_saved_usd: 0,
+  cache_read_tokens: 0,
 })
 export const providers = writable<ProviderStatus[]>([])
 export const timeseries = writable<TimeBucket[]>([])
 export const savings = writable<Savings>({
-  period: 'month', requests: 0, actual_usd: 0, baseline_usd: 0, saved_usd: 0, percent_saved: 0,
+  period: 'month', requests: 0, actual_usd: 0, baseline_usd: 0, saved_usd: 0, percent_saved: 0, cache_saved_usd: 0,
 })
 export const connected = writable(false)
 

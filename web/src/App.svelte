@@ -87,6 +87,7 @@
       <div class="savings-msg">
         💸 You've saved <b>${$savings.saved_usd.toFixed(2)}</b> this month —
         <b>{Math.round($savings.percent_saved)}%</b> cheaper than Claude
+        {#if $savings.cache_saved_usd > 0}<span class="cache-note">(incl. <b>${$savings.cache_saved_usd.toFixed(2)}</b> from caching)</span>{/if}
       </div>
       <div class="savings-actions">
         <a class="btn" href={shareUrl} target="_blank" rel="noopener">Share on X</a>
@@ -98,6 +99,7 @@
   <div class="stats">
     <div class="card"><span class="num accent">{$stats.total_requests}</span><span class="label">requests today</span></div>
     <div class="card"><span class="num green">${$stats.total_cost_usd.toFixed(4)}</span><span class="label">cost today</span></div>
+    <div class="card"><span class="num cyan">${($stats.cache_saved_usd || 0).toFixed(4)}</span><span class="label">cache saved today</span></div>
     <div class="card"><span class="num">${$stats.forecast_usd.toFixed(2)}</span><span class="label">forecast / month</span></div>
     <div class="card"><span class="num">{Math.round($stats.avg_latency_ms)}ms</span><span class="label">avg latency</span></div>
   </div>
@@ -179,7 +181,8 @@
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
   .card { display: flex; flex-direction: column; gap: 4px; background: #0a0e1a; border: 1px solid #1a2035; border-radius: 8px; padding: 18px 20px; }
   .num { font-size: 26px; font-weight: 700; font-family: 'Geist Mono', monospace; }
-  .num.accent { color: #7c3aed; } .num.green { color: #10b981; }
+  .num.accent { color: #7c3aed; } .num.green { color: #10b981; } .num.cyan { color: #06b6d4; }
+  .cache-note { color: #06b6d4; font-size: 13px; }
   .label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.12em; }
 
   .providers { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
