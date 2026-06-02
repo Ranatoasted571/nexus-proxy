@@ -4,9 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>NEXUS — route every AI coding tool to the cheapest LLM</title>
-<meta name="description" content="Open-source single-binary proxy + live dashboard. Route Claude Code, Cursor and aider to the cheapest capable model — 24+ providers, smart cache, cost dashboard." />
+<meta name="description" content="Open-source single-binary proxy + live dashboard. Route Claude Code, Cursor and aider to the cheapest capable model — 24+ providers, cheap-first cascade, privacy firewall, smart cache, inspect & replay, live cost dashboard." />
 <meta property="og:title" content="NEXUS — one proxy for every AI coding tool" />
-<meta property="og:description" content="Route Claude Code, Cursor & aider to the cheapest capable LLM. 24+ providers, smart cache, live cost dashboard. Open source." />
+<meta property="og:description" content="Route Claude Code, Cursor & aider to the cheapest capable LLM. Cheap-first cascade, privacy firewall, smart cache, inspect & replay, live cost dashboard. 24+ providers. Open source." />
 <meta property="og:image" content="https://raw.githubusercontent.com/lynuxis2026-pixel/nexus-proxy/main/docs/hero.svg" />
 <meta name="twitter:card" content="summary_large_image" />
 <style>
@@ -50,7 +50,7 @@
   <header>
     <h1>NE<span>X</span>US</h1>
     <div class="tag">One proxy. Every AI coding tool. The cheapest capable model — every time.</div>
-    <div class="sub">Open-source, single Go binary · live cost dashboard · MIT</div>
+    <div class="sub">Open-source · single Go binary · privacy firewall · live cost dashboard · MIT</div>
     <div class="cta">
       <a class="btn" href="https://github.com/lynuxis2026-pixel/nexus-proxy">⭐ Star on GitHub</a>
       <a class="btn ghost" href="https://github.com/lynuxis2026-pixel/nexus-proxy/releases">Download</a>
@@ -58,6 +58,7 @@
     <div class="install">
       <div class="cmd"><code class="mono" id="c1">curl -fsSL https://raw.githubusercontent.com/lynuxis2026-pixel/nexus-proxy/main/install.sh | sh</code><button class="copy" data-t="c1">copy</button></div>
       <div class="cmd"><code class="mono" id="c2">irm https://raw.githubusercontent.com/lynuxis2026-pixel/nexus-proxy/main/install.ps1 | iex</code><button class="copy" data-t="c2">copy</button></div>
+      <div class="cmd"><code class="mono" id="c3">nexus start --cascade --redact --semantic-cache</code><button class="copy" data-t="c3">copy</button></div>
     </div>
     <img class="shot" src="dashboard.gif" alt="NEXUS live dashboard" />
   </header>
@@ -75,9 +76,15 @@
     <h2>What it does</h2>
     <div class="grid">
       <div class="card"><h3>🧭 Intelligent routing</h3><p>Classifies each request and sends it to the cheapest model that can handle it. Free tiers first, Claude for the hard stuff.</p></div>
-      <div class="card"><h3>🌍 Universal gateway</h3><p>Speaks both the Anthropic and OpenAI APIs, so every AI coding tool routes through one proxy.</p></div>
-      <div class="card"><h3>⚡ Smart cache + failover</h3><p>Identical requests are instant and free. Rate-limited free tiers fail over automatically.</p></div>
-      <div class="card"><h3>📊 Live dashboard</h3><p>Every request, model, latency and cost in real time — plus a running "saved vs. Claude" number.</p></div>
+      <div class="card"><h3>🪜 Cheap-first cascade</h3><p>Tries the cheapest capable model first, verifies the output, and escalates to Claude only when it fails. Real savings, with a safety net.</p></div>
+      <div class="card"><h3>🔒 Privacy firewall</h3><p>Masks API keys, secrets and PII <em>before</em> a request ever leaves for a third-party model — restored transparently in the response.</p></div>
+      <div class="card"><h3>🔍 Inspect &amp; replay</h3><p>Click any request to see the full prompt and response, then replay it against another provider to compare cost and output.</p></div>
+      <div class="card"><h3>⚡ Smart + semantic cache</h3><p>Identical requests are instant and free; an opt-in semantic layer also serves near-identical prompts. Rate-limited tiers fail over automatically.</p></div>
+      <div class="card"><h3>🧠 Cache-aware costs</h3><p>Captures provider prompt-cache tokens and shows your true, cache-discounted spend — plus a live "cache saved $X".</p></div>
+      <div class="card"><h3>🌍 Universal gateway</h3><p>Speaks both the Anthropic and OpenAI APIs, so Claude Code, Cursor, aider, Cline and any SDK route through one proxy.</p></div>
+      <div class="card"><h3>🗝️ Free-tier key pools</h3><p>Round-robin across multiple free keys with automatic 429 cooldown, so free tiers behave like one big quota.</p></div>
+      <div class="card"><h3>📊 Live dashboard + <code class="mono">nexus top</code></h3><p>Every request, model, latency and cost in real time — in the browser, or a dependency-free terminal TUI.</p></div>
+      <div class="card"><h3>🩺 Zero-config setup</h3><p><code class="mono">nexus doctor</code> tests every provider and auto-discovers keys from your environment, so <code class="mono">nexus start</code> just works.</p></div>
       <div class="card"><h3>💸 Budget cap</h3><p>Set a daily limit; once hit, NEXUS uses only free/local models for the rest of the day.</p></div>
       <div class="card"><h3>📦 Single binary</h3><p>One Go binary, pure-Go SQLite. No Python, no Docker. <code class="mono">curl | sh</code> and go.</p></div>
     </div>
