@@ -92,6 +92,15 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 		return nil, err
 	}
 
+	// Zero-config boost: pick up provider keys already in the environment
+	// (GROQ_API_KEY, OPENAI_API_KEY, …) that aren't explicitly configured.
+	if disc := config.DiscoverFromEnv(appCfg.Providers); len(disc) > 0 {
+		for _, d := range disc {
+			log.Info().Str("provider", d.Name).Msg("Auto-discovered provider from environment")
+		}
+		appCfg.Providers = append(appCfg.Providers, disc...)
+	}
+
 	rt := router.New(router.RoutingStrategy(appCfg.Routing.Strategy))
 	active := make(map[string]*activeProvider)
 	for _, pc := range appCfg.Providers {

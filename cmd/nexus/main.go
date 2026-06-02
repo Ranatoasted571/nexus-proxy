@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/rs/zerolog"
@@ -96,6 +97,13 @@ var modelsCmd = &cobra.Command{
 	RunE:  runModels,
 }
 
+// doctor command
+var doctorCmd = &cobra.Command{
+	Use:   "doctor",
+	Short: "Diagnose setup, test every provider, and suggest fixes",
+	RunE:  runDoctor,
+}
+
 // version command
 var versionCmd = &cobra.Command{
 	Use:   "version",
@@ -151,6 +159,7 @@ func init() {
 	rootCmd.AddCommand(costCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(modelsCmd)
+	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 
@@ -340,11 +349,81 @@ func runModels(cmd *cobra.Command, args []string) error {
 }
 
 // specFromConfig builds a providers.Spec from a config entry, resolving env keys.
+func runDoctor(cmd *cobra.Command, args []string) error {
+	color.Cyan("🩺 NEXUS doctor\n")
+	cfgPath := config.DefaultPath()
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return err
+	}
+	color.White("  Config:   %s", cfgPath)
+	color.White("  Database: %s", storage.DefaultDBPath())
+
+	disc := config.DiscoverFromEnv(cfg.Providers)
+	if len(disc) > 0 {
+		color.Green("\n  Auto-discovered %d provider(s) from your environment:", len(disc))
+		for _, d := range disc {
+			color.White("    • %s (from $%s)", d.Name, strings.TrimPrefix(d.APIKey, "env:"))
+		}
+	}
+	all := append(append([]config.Provider{}, cfg.Providers...), disc...)
+
+	if len(all) == 0 {
+		color.Yellow("\n  No providers configured.")
+		color.White("  Add one:   nexus add groq <key>        # free tier")
+		color.White("  Or set an env var (e.g. GROQ_API_KEY) and re-run — NEXUS auto-detects it.")
+		return nil
+	}
+
+	color.Cyan("\n  Providers:")
+	var free, premium int
+	for _, pc := range all {
+		impl, err := providers.New(specFromConfig(pc))
+		if err != nil {
+			color.Red("    ✗ %-12s config error: %v", pc.Name, err)
+			continue
+		}
+		start := time.Now()
+		hcErr := impl.HealthCheck()
+		ms := time.Since(start).Milliseconds()
+		switch impl.Tier() {
+		case "free", "local":
+			free++
+		case "premium":
+			premium++
+		}
+		if hcErr != nil {
+			color.Red("    ✗ %-12s %-8s unreachable (%v)", pc.Name, impl.Tier(), hcErr)
+		} else {
+			color.Green("    ✓ %-12s %-8s %dms", pc.Name, impl.Tier(), ms)
+		}
+	}
+
+	color.Cyan("\n  Checks:")
+	if free > 0 {
+		color.Green("    ✓ free/local tier available — simple tasks cost $0")
+	} else {
+		color.Yellow("    ! no free/local provider — add groq, gemini or ollama for $0 simple tasks")
+	}
+	if premium > 0 {
+		color.Green("    ✓ premium tier available — complex tasks stay high-quality")
+	} else {
+		color.Yellow("    ! no premium provider — add anthropic for the hardest tasks")
+	}
+	color.Green("    ✓ %d provider(s) ready", len(all))
+	color.White("\n  Tip: nexus start --cascade --redact --semantic-cache   # max savings + privacy")
+	return nil
+}
+
 func specFromConfig(pc config.Provider) providers.Spec {
+	key := config.ResolveKey(pc.APIKey)
+	if key == "" && len(pc.APIKeys) > 0 {
+		key = config.ResolveKey(pc.APIKeys[0])
+	}
 	return providers.Spec{
 		Name:        pc.Name,
 		Type:        pc.Type,
-		APIKey:      config.ResolveKey(pc.APIKey),
+		APIKey:      key,
 		BaseURL:     pc.BaseURL,
 		Models:      pc.Models,
 		Tier:        pc.Tier,

@@ -127,6 +127,59 @@ func (c *Config) Upsert(p Provider) {
 	c.Providers = append(c.Providers, p)
 }
 
+// knownEnvKeys maps a provider name to the environment variables commonly used
+// for its API key, so NEXUS can auto-discover providers with zero config.
+var knownEnvKeys = []struct {
+	name string
+	vars []string
+}{
+	{"anthropic", []string{"ANTHROPIC_API_KEY"}},
+	{"openai", []string{"OPENAI_API_KEY"}},
+	{"groq", []string{"GROQ_API_KEY"}},
+	{"deepseek", []string{"DEEPSEEK_API_KEY"}},
+	{"gemini", []string{"GEMINI_API_KEY", "GOOGLE_API_KEY"}},
+	{"mistral", []string{"MISTRAL_API_KEY"}},
+	{"together", []string{"TOGETHER_API_KEY", "TOGETHER_AI_API_KEY"}},
+	{"openrouter", []string{"OPENROUTER_API_KEY"}},
+	{"cohere", []string{"COHERE_API_KEY"}},
+	{"xai", []string{"XAI_API_KEY", "GROK_API_KEY"}},
+	{"fireworks", []string{"FIREWORKS_API_KEY"}},
+	{"perplexity", []string{"PERPLEXITY_API_KEY"}},
+	{"deepinfra", []string{"DEEPINFRA_API_KEY"}},
+	{"cerebras", []string{"CEREBRAS_API_KEY"}},
+	{"sambanova", []string{"SAMBANOVA_API_KEY"}},
+	{"nvidia", []string{"NVIDIA_API_KEY"}},
+	{"moonshot", []string{"MOONSHOT_API_KEY"}},
+	{"zhipu", []string{"ZHIPU_API_KEY"}},
+	{"ai21", []string{"AI21_API_KEY"}},
+}
+
+// DiscoverFromEnv returns providers whose API keys are present in the
+// environment but not already configured. The key is stored as "env:VAR" so it
+// is resolved at runtime and never persisted. Values equal to "nexus-local"
+// (Claude Code's placeholder when pointed at NEXUS) are ignored.
+func DiscoverFromEnv(existing []Provider) []Provider {
+	have := map[string]bool{}
+	for _, p := range existing {
+		have[strings.ToLower(p.Name)] = true
+	}
+	var out []Provider
+	for _, k := range knownEnvKeys {
+		if have[k.name] {
+			continue
+		}
+		for _, v := range k.vars {
+			val := os.Getenv(v)
+			if val == "" || val == "nexus-local" {
+				continue
+			}
+			out = append(out, Provider{Name: k.name, APIKey: "env:" + v})
+			break
+		}
+	}
+	return out
+}
+
 // ResolveKey resolves an api_key value: "env:VAR" reads VAR from the
 // environment; anything else is returned verbatim.
 func ResolveKey(v string) string {
