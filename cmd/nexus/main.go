@@ -181,9 +181,14 @@ func init() {
 	rootCmd.AddCommand(topCmd)
 	rootCmd.AddCommand(mcpCmd)
 	rootCmd.AddCommand(codeCmd)
+	rootCmd.AddCommand(benchCmd)
 	rootCmd.AddCommand(versionCmd)
 
 	codeCmd.Flags().IntVar(&flagCodePort, "port", 3000, "Proxy port NEXUS should use")
+	benchCmd.Flags().IntVar(&flagBenchPort, "port", 3000, "Proxy port to benchmark against")
+	benchCmd.Flags().IntVar(&flagBenchN, "n", 10, "How many recent captured requests to benchmark")
+	benchCmd.Flags().StringVar(&flagBenchProviders, "providers", "", "Comma-separated providers to benchmark (default: all configured)")
+	benchCmd.Flags().StringVar(&flagBenchPrompt, "prompt", "", "Benchmark a single ad-hoc prompt instead of captured traffic")
 }
 
 func main() {

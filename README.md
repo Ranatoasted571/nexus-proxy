@@ -199,6 +199,7 @@ nexus add <provider> <key>  # add a provider (key can be "k1,k2,k3" for a pool)
 nexus doctor             # diagnose setup, test every provider, suggest fixes
 nexus top                # live terminal dashboard (htop for your LLM traffic)
 nexus mcp                # run as an MCP server (Claude Code can query your usage)
+nexus bench              # benchmark every provider on your real captured traffic
 nexus status             # provider health check
 nexus models             # show Claude→provider model mapping
 nexus logs               # recent requests
@@ -401,6 +402,19 @@ nexus top                # reads the dashboard API; --once for a single frame
 
 A live, dependency-free terminal dashboard — requests, cost, cache savings,
 providers and a color-coded request feed — for when you don't want a browser.
+
+### 🧪 Benchmark on your real traffic
+
+```bash
+nexus bench                       # replays your last N captured requests at every provider
+nexus bench --prompt "refactor this function"   # or benchmark a single ad-hoc prompt
+```
+
+With `--inspect` history, `nexus bench` replays your **actual** requests against
+every provider and prints a cost × latency × output-tokens × *agreement* table
+(agreement = how close each provider's output is to your original), then
+recommends the cheapest provider that stays close. Stop guessing which model to
+use — measure it on your own traffic.
 
 ### 🧩 MCP server
 
