@@ -40,6 +40,7 @@ type Handler struct {
 	broker     EventPublisher // may be nil
 	budget     *budgetTracker
 	cache      *responseCache // may be nil (disabled)
+	cascade    bool           // cheap-first cascade with verification
 	stopHealth chan struct{}
 }
 
@@ -115,12 +116,17 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 		}
 	}
 
+	h.cascade = cfg.Cascade || appCfg.Routing.Cascade
+
 	if len(active) == 0 {
 		log.Info().Msg("No providers configured — zero-config mode (forwarding directly to Anthropic)")
 	} else {
 		log.Info().Int("providers", len(active)).Str("strategy", appCfg.Routing.Strategy).Msg("Router configured")
 		if budgetLimit > 0 {
 			log.Info().Float64("daily_budget_usd", budgetLimit).Msg("Daily budget cap enabled — free/local only once exceeded")
+		}
+		if h.cascade {
+			log.Info().Msg("Cheap-first cascade enabled — try the cheapest capable model, verify, escalate on failure")
 		}
 		go h.healthLoop() // periodic background health checks
 	}
@@ -242,6 +248,21 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 	if len(h.providers) == 0 || len(chain) == 0 {
 		h.forwardDirectAnthropic(w, r, req, body, startTime, complexity)
 		return
+	}
+
+	// Cheap-first cascade: try the cheapest capable provider, verify its output,
+	// and escalate to a stronger model only on failure. Falls through to the
+	// normal failover path if every cascade candidate is unreachable.
+	if h.cascade {
+		cc := h.router.CascadeChain(complexity)
+		if h.budget.Over() {
+			if cheap := freeLocalOnly(cc); len(cheap) > 0 {
+				cc = cheap
+			}
+		}
+		if len(cc) > 0 && h.serveCascade(w, r, req, body, startTime, complexity, cc) {
+			return
+		}
 	}
 
 	// Daily budget cap: once today's spend exceeds the limit, restrict to

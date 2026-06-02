@@ -22,6 +22,7 @@ type Config struct {
 	DisableCache   bool    // turn off the response cache
 	SemanticCache  bool    // enable near-match (semantic) response caching
 	SemanticThreshold float64 // cosine threshold for semantic cache (0 ⇒ 0.95)
+	Cascade        bool    // cheap-first cascade with verification
 }
 
 // Server is the main proxy server

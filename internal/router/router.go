@@ -130,6 +130,25 @@ func (r *Router) RouteChain(requestedModel string, complexity Complexity) []*Pro
 	}
 }
 
+// CascadeChain orders healthy providers cheapest-first (local → free → standard
+// → premium) for the cheap-first cascade: try the cheapest capable model, verify
+// its output, and escalate only on failure. Critical requests stay premium-first
+// so security/production work is never gambled on a weak model.
+func (r *Router) CascadeChain(complexity Complexity) []*Provider {
+	if complexity == ComplexityCritical {
+		return r.autoChain(complexity)
+	}
+	pri := map[string]int{"local": 0, "free": 1, "standard": 2, "premium": 3}
+	hp := r.healthy()
+	sort.SliceStable(hp, func(i, j int) bool {
+		if pri[hp[i].Tier] != pri[hp[j].Tier] {
+			return pri[hp[i].Tier] < pri[hp[j].Tier]
+		}
+		return hp[i].Priority < hp[j].Priority
+	})
+	return hp
+}
+
 // ─── Strategy implementations ──────────────────────────────────────────────
 
 func (r *Router) healthy() []*Provider {
