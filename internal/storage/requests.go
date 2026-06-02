@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -28,6 +29,7 @@ type Request struct {
 	Stream           bool
 	Prompt           string // full request JSON — only stored when --inspect is on
 	Response         string // full response body — only stored when --inspect is on
+	User             string // team attribution (empty = unattributed)
 }
 
 // LogRequest saves a request to the database and returns the new row ID.
@@ -38,8 +40,8 @@ func (db *DB) LogRequest(req *Request) (int64, error) {
 			provider, complexity, input_tokens, output_tokens,
 			cache_read_tokens, cache_write_tokens,
 			cost_usd, cache_saved_usd, latency_ms, status, error, stream,
-			prompt, response
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			prompt, response, user
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		// Store as SQLite-native UTC datetime text so date()/strftime() work.
 		req.CreatedAt.UTC().Format("2006-01-02 15:04:05"),
 		req.RequestID,
@@ -59,6 +61,7 @@ func (db *DB) LogRequest(req *Request) (int64, error) {
 		req.Stream,
 		req.Prompt,
 		req.Response,
+		req.User,
 	)
 	if err != nil {
 		return 0, err
@@ -297,6 +300,55 @@ func (db *DB) GetSavings(period string) (*Savings, error) {
 		s.PercentSaved = s.SavedUSD / s.BaselineUSD * 100
 	}
 	return s, rows.Err()
+}
+
+// LeaderEntry is one row of the team savings leaderboard.
+type LeaderEntry struct {
+	User      string  `json:"user"`
+	Requests  int     `json:"requests"`
+	ActualUSD float64 `json:"actual_usd"`
+	SavedUSD  float64 `json:"saved_usd"`
+}
+
+// GetLeaderboard returns per-user request counts, actual spend and savings vs the
+// all-Claude baseline for a period, sorted by savings descending.
+func (db *DB) GetLeaderboard(period string) ([]LeaderEntry, error) {
+	q := fmt.Sprintf(`SELECT COALESCE(NULLIF(user,''),'unattributed') AS u,
+			model_asked, input_tokens, output_tokens,
+			cache_read_tokens, cache_write_tokens, cost_usd
+		FROM requests WHERE date(created_at) >= %s`, sinceClause(period))
+	rows, err := db.conn.Query(q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	agg := map[string]*LeaderEntry{}
+	for rows.Next() {
+		var u, model string
+		var in, out, cr, cw int
+		var cost float64
+		if err := rows.Scan(&u, &model, &in, &out, &cr, &cw, &cost); err != nil {
+			continue
+		}
+		e := agg[u]
+		if e == nil {
+			e = &LeaderEntry{User: u}
+			agg[u] = e
+		}
+		e.Requests++
+		e.ActualUSD += cost
+		e.SavedUSD += anthropicBaseline(model, in+cr+cw, out) - cost
+	}
+	out := make([]LeaderEntry, 0, len(agg))
+	for _, e := range agg {
+		if e.SavedUSD < 0 {
+			e.SavedUSD = 0
+		}
+		out = append(out, *e)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].SavedUSD > out[j].SavedUSD })
+	return out, rows.Err()
 }
 
 // GetComplexityBreakdown returns request counts grouped by complexity.

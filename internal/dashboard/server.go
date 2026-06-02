@@ -64,6 +64,7 @@ func (s *Server) Routes() http.Handler {
 	api.HandleFunc("/timeseries", s.handleTimeseries).Methods("GET")
 	api.HandleFunc("/breakdown", s.handleBreakdown).Methods("GET")
 	api.HandleFunc("/savings", s.handleSavings).Methods("GET")
+	api.HandleFunc("/leaderboard", s.handleLeaderboard).Methods("GET")
 	api.HandleFunc("/savings/card.svg", s.handleSavingsCard).Methods("GET")
 
 	// Serve the embedded dashboard UI (Svelte build, or the committed fallback).
@@ -295,6 +296,20 @@ func (s *Server) handleSavings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, &storage.Savings{Period: period})
+}
+
+func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
+	period := r.URL.Query().Get("period")
+	if period == "" {
+		period = "month"
+	}
+	if s.db != nil {
+		if lb, err := s.db.GetLeaderboard(period); err == nil {
+			writeJSON(w, map[string]interface{}{"period": period, "leaderboard": lb})
+			return
+		}
+	}
+	writeJSON(w, map[string]interface{}{"period": period, "leaderboard": []interface{}{}})
 }
 
 func (s *Server) handleSavingsCard(w http.ResponseWriter, r *http.Request) {

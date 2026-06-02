@@ -428,6 +428,19 @@ every provider and prints a cost × latency × output-tokens × *agreement* tabl
 recommends the cheapest provider that stays close. Stop guessing which model to
 use — measure it on your own traffic.
 
+### 👥 Team mode
+
+Point a whole team at one NEXUS and they automatically share its response cache
+(everyone benefits from each other's hits). Attribute usage per person — either
+by setting a header, or by giving each dev a `nexus-<name>` key:
+
+```bash
+export ANTHROPIC_API_KEY=nexus-alice   # or send an X-Nexus-User: alice header
+```
+
+The dashboard then shows a **team savings leaderboard** ("alice saved $42 this
+month"). No accounts, no setup — just a shared proxy.
+
 ### 🧩 MCP server
 
 ```bash

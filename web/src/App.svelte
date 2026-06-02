@@ -44,6 +44,17 @@
     replayLoading = false
   }
 
+  // ── Team leaderboard ──
+  let leaderboard: any[] = []
+  async function loadLeaderboard() {
+    try {
+      const r = await fetch('/api/leaderboard')
+      const j = await r.json()
+      leaderboard = j.leaderboard || []
+    } catch { /* ignore */ }
+  }
+  $: namedBoard = leaderboard.filter((e) => e.user && e.user !== 'unattributed')
+
   let costCanvas: HTMLCanvasElement
   let provCanvas: HTMLCanvasElement
   let costChart: Chart | undefined
@@ -82,7 +93,8 @@
       },
     })
 
-    poll = setInterval(() => { fetchTimeseries(); fetchSavings() }, 10000)
+    loadLeaderboard()
+    poll = setInterval(() => { fetchTimeseries(); fetchSavings(); loadLeaderboard() }, 10000)
   })
 
   onDestroy(() => {
@@ -156,6 +168,20 @@
       <div class="canvas-wrap"><canvas bind:this={provCanvas}></canvas></div>
     </div>
   </div>
+
+  {#if namedBoard.length}
+    <div class="feed-title">Team leaderboard · saved this month</div>
+    <div class="board">
+      {#each namedBoard as e, i (e.user)}
+        <div class="brow">
+          <span class="rank">#{i + 1}</span>
+          <span class="buser">{e.user}</span>
+          <span class="breq">{e.requests} req</span>
+          <span class="bsaved">${e.saved_usd.toFixed(2)}</span>
+        </div>
+      {/each}
+    </div>
+  {/if}
 
   <div class="feed-title">Live request feed</div>
   <div class="feed">
@@ -285,6 +311,14 @@
   .replay-out { margin-top: 4px; }
   .hint { color: #94a3b8; background: #11182f; border: 1px solid #1a2035; border-radius: 8px; padding: 12px; }
   .hint code { color: #06b6d4; }
+
+  .board { display: flex; flex-direction: column; gap: 5px; margin-bottom: 28px; }
+  .brow { display: grid; grid-template-columns: 40px 1fr 90px 90px; align-items: center; gap: 10px;
+    background: #0a0e1a; border: 1px solid #1a2035; border-radius: 8px; padding: 9px 14px; }
+  .rank { color: #7c3aed; font-weight: 700; font-family: 'Geist Mono', monospace; }
+  .buser { color: #e2e8f0; font-weight: 600; }
+  .breq { color: #64748b; text-align: right; font-family: 'Geist Mono', monospace; font-size: 12px; }
+  .bsaved { color: #10b981; text-align: right; font-weight: 700; font-family: 'Geist Mono', monospace; }
   .label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.12em; }
 
   .providers { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }

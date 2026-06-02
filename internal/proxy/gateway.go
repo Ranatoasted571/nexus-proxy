@@ -29,6 +29,8 @@ func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) 
 	}
 	defer r.Body.Close()
 
+	user := deriveUser(r.Header) // team attribution
+
 	// Privacy firewall: mask secrets/PII before anything downstream sees the body.
 	var restoreMap map[string]string
 	if h.firewall != nil {
@@ -41,7 +43,7 @@ func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) 
 	if h.cache != nil {
 		key := cacheKey("c", body)
 		if e, ok := h.cache.get(key); ok {
-			h.serveCached(w, e, startTime)
+			h.serveCached(w, e, startTime, user)
 			return
 		}
 		var vec sparseVec
@@ -52,7 +54,7 @@ func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) 
 				if !ht {
 					vec = embed(text)
 					if e, ok := h.cache.getSemantic(quickModel(body), vec); ok {
-						h.serveCached(w, e, startTime)
+						h.serveCached(w, e, startTime, user)
 						return
 					}
 				}
@@ -94,6 +96,7 @@ func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) 
 	hasTools := len(oreq.Tools) > 0
 	complexity := router.ClassifyRequest(oreq.Model, rawMsgs.Messages, hasTools)
 	areq := TransformOpenAIToAnthropic(oreq) // internal form for Anthropic providers + logging
+	areq.nexusUser = user
 
 	log.Debug().Str("model", oreq.Model).Str("complexity", complexity.String()).
 		Bool("stream", oreq.Stream).Bool("tools", hasTools).Msg("Incoming request (openai gateway)")

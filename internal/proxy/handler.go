@@ -270,6 +270,8 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
+	user := deriveUser(r.Header) // team attribution
+
 	// Privacy firewall: mask secrets/PII before anything downstream (cache key,
 	// classification, upstream) sees the body. Originals are restored in the
 	// response by a restoringWriter wrapped around w below.
@@ -284,7 +286,7 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 	if h.cache != nil {
 		key := cacheKey("m", body)
 		if e, ok := h.cache.get(key); ok {
-			h.serveCached(w, e, startTime)
+			h.serveCached(w, e, startTime, user)
 			return
 		}
 		var vec sparseVec
@@ -295,7 +297,7 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 				if !ht {
 					vec = embed(text)
 					if e, ok := h.cache.getSemantic(quickModel(body), vec); ok {
-						h.serveCached(w, e, startTime)
+						h.serveCached(w, e, startTime, user)
 						return
 					}
 				}
@@ -327,6 +329,7 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusBadRequest, "invalid JSON in request body")
 		return
 	}
+	req.nexusUser = user
 
 	// Parse messages as raw maps for the classifier.
 	var raw struct {
@@ -669,6 +672,7 @@ func (h *Handler) logResult(active *activeProvider, req AnthropicRequest, comple
 		LatencyMS:        latency.Milliseconds(),
 		Status:           status,
 		Stream:           stream,
+		User:             req.nexusUser,
 	}
 	if h.inspect { // opt-in: capture full prompt + response for the inspector
 		if pj, err := json.Marshal(req); err == nil {
@@ -728,7 +732,7 @@ func (h *Handler) publishStats() {
 }
 
 // serveCached writes a cached response and logs it as a (free, instant) cache hit.
-func (h *Handler) serveCached(w http.ResponseWriter, e cacheEntry, start time.Time) {
+func (h *Handler) serveCached(w http.ResponseWriter, e cacheEntry, start time.Time, user string) {
 	if e.ctype != "" {
 		w.Header().Set("Content-Type", e.ctype)
 	}
@@ -743,6 +747,7 @@ func (h *Handler) serveCached(w http.ResponseWriter, e cacheEntry, start time.Ti
 			CreatedAt: time.Now(), Provider: "cache",
 			ModelAsked: orStr(e.model, "cache"), ModelUsed: "cache", Complexity: "cached",
 			InputTokens: e.in, OutputTokens: e.out, CostUSD: 0, LatencyMS: latency.Milliseconds(), Status: e.status,
+			User: user,
 		})
 	}
 	if h.broker != nil {
@@ -970,6 +975,19 @@ type AnthropicRequest struct {
 	Stream    bool          `json:"stream"`
 	System    interface{}   `json:"system,omitempty"`
 	Tools     []interface{} `json:"tools,omitempty"`
+	nexusUser string        // team attribution; derived per request, never serialized
+}
+
+// deriveUser attributes a request to a team member: the X-Nexus-User header, or
+// a "nexus-<name>" API key (so each dev just sets ANTHROPIC_API_KEY=nexus-alice).
+func deriveUser(h http.Header) string {
+	if u := h.Get("X-Nexus-User"); u != "" {
+		return u
+	}
+	if key := extractAPIKey(h); strings.HasPrefix(key, "nexus-") && key != "nexus-local" {
+		return strings.TrimPrefix(key, "nexus-")
+	}
+	return ""
 }
 
 // Message represents a single message in a conversation
