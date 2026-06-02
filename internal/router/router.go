@@ -64,6 +64,66 @@ type Router struct {
 	mu        sync.RWMutex
 	strategy  RoutingStrategy
 	providers []*Provider
+	adaptive  bool
+	stats     map[string]*provStat // key: provider|complexity
+}
+
+// provStat tracks how often a provider produced a usable answer for a complexity.
+type provStat struct{ attempts, successes int }
+
+func statKey(name string, c Complexity) string { return name + "|" + c.String() }
+
+// SetAdaptive turns on learned routing: within a tier, providers that have
+// historically produced usable answers for a complexity are tried first.
+func (r *Router) SetAdaptive(b bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.adaptive = b
+	if r.stats == nil {
+		r.stats = map[string]*provStat{}
+	}
+}
+
+// RecordOutcome records whether a provider produced a usable answer.
+func (r *Router) RecordOutcome(name string, c Complexity, ok bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.stats == nil {
+		r.stats = map[string]*provStat{}
+	}
+	k := statKey(name, c)
+	s := r.stats[k]
+	if s == nil {
+		s = &provStat{}
+		r.stats[k] = s
+	}
+	s.attempts++
+	if ok {
+		s.successes++
+	}
+}
+
+// successRate returns successes/attempts, or a neutral 0.5 with no data. Caller
+// holds at least an RLock.
+func (r *Router) successRate(name string, c Complexity) float64 {
+	if s := r.stats[statKey(name, c)]; s != nil && s.attempts > 0 {
+		return float64(s.successes) / float64(s.attempts)
+	}
+	return 0.5
+}
+
+// adaptiveRates snapshots the success rate of each provider for a complexity.
+func (r *Router) adaptiveRates(hp []*Provider, c Complexity) map[string]float64 {
+	rates := map[string]float64{}
+	if !r.adaptive {
+		return rates
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, p := range hp {
+		rates[p.Name] = r.successRate(p.Name, c)
+	}
+	return rates
 }
 
 // New creates a new router
@@ -140,9 +200,13 @@ func (r *Router) CascadeChain(complexity Complexity) []*Provider {
 	}
 	pri := map[string]int{"local": 0, "free": 1, "standard": 2, "premium": 3}
 	hp := r.healthy()
+	rates := r.adaptiveRates(hp, complexity)
 	sort.SliceStable(hp, func(i, j int) bool {
 		if pri[hp[i].Tier] != pri[hp[j].Tier] {
 			return pri[hp[i].Tier] < pri[hp[j].Tier]
+		}
+		if r.adaptive && rates[hp[i].Name] != rates[hp[j].Name] {
+			return rates[hp[i].Name] > rates[hp[j].Name] // higher success first
 		}
 		return hp[i].Priority < hp[j].Priority
 	})
@@ -172,6 +236,7 @@ func (r *Router) autoChain(complexity Complexity) []*Provider {
 		rank[t] = i
 	}
 	hp := r.healthy()
+	rates := r.adaptiveRates(hp, complexity)
 	sort.SliceStable(hp, func(i, j int) bool {
 		ri, ok := rank[hp[i].Tier]
 		if !ok {
@@ -183,6 +248,9 @@ func (r *Router) autoChain(complexity Complexity) []*Provider {
 		}
 		if ri != rj {
 			return ri < rj
+		}
+		if r.adaptive && rates[hp[i].Name] != rates[hp[j].Name] {
+			return rates[hp[i].Name] > rates[hp[j].Name]
 		}
 		return hp[i].Priority < hp[j].Priority
 	})

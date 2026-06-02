@@ -137,6 +137,7 @@ var (
 	flagSemanticCache     bool
 	flagSemanticThreshold float64
 	flagCascade           bool
+	flagAdaptive          bool
 	flagRedact            bool
 	flagTopPort           int
 	flagTopOnce           bool
@@ -156,6 +157,7 @@ func init() {
 	startCmd.Flags().BoolVar(&flagSemanticCache, "semantic-cache", false, "Serve near-identical tool-less requests from cache (local embedding match)")
 	startCmd.Flags().Float64Var(&flagSemanticThreshold, "semantic-threshold", 0, "Cosine threshold for the semantic cache (default 0.95)")
 	startCmd.Flags().BoolVar(&flagCascade, "cascade", false, "Cheap-first cascade: try the cheapest capable model, verify, escalate on failure")
+	startCmd.Flags().BoolVar(&flagAdaptive, "adaptive", false, "Learned routing: prefer the provider that historically handles each task type best")
 	startCmd.Flags().BoolVar(&flagRedact, "redact", false, "Privacy firewall: mask secrets/API keys/PII before forwarding to any provider")
 	startCmd.Flags().BoolVar(&flagInspect, "inspect", false, "Store full prompts/responses locally so the dashboard can inspect + replay them")
 	startCmd.Flags().StringVar(&flagAlertWebhook, "alert-webhook", "", "Slack/Discord/generic webhook URL for daily-budget alerts")
@@ -224,6 +226,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		SemanticCache:     flagSemanticCache,
 		SemanticThreshold: flagSemanticThreshold,
 		Cascade:           flagCascade,
+		Adaptive:          flagAdaptive,
 		Redact:            flagRedact,
 		Inspect:           flagInspect,
 		AlertWebhook:      flagAlertWebhook,

@@ -43,6 +43,7 @@ func (h *Handler) serveCascade(w http.ResponseWriter, r *http.Request, req Anthr
 		resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
+			h.router.RecordOutcome(active.impl.Name(), complexity, false)
 			if last {
 				h.relayBuffered(w, active, req, raw, resp, startTime, complexity)
 				return true
@@ -52,9 +53,11 @@ func (h *Handler) serveCascade(w http.ResponseWriter, r *http.Request, req Anthr
 		}
 
 		if !last && !verifyResponse(active.impl.Name(), raw) {
+			h.router.RecordOutcome(active.impl.Name(), complexity, false)
 			log.Info().Str("provider", cand.Name).Msg("cascade: weak/invalid output, escalating to a stronger model")
 			continue
 		}
+		h.router.RecordOutcome(active.impl.Name(), complexity, true)
 		if !last {
 			log.Info().Str("provider", cand.Name).Str("complexity", complexity.String()).Msg("cascade: cheap model accepted ✓")
 		}

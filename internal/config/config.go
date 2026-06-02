@@ -31,6 +31,7 @@ type Routing struct {
 	SemanticCache     bool    `toml:"semantic_cache,omitempty"`    // near-match response caching for tool-less requests
 	SemanticThreshold float64 `toml:"semantic_threshold,omitempty"` // cosine threshold (0 ⇒ 0.95)
 	Cascade           bool    `toml:"cascade,omitempty"`           // cheap-first cascade with verification
+	Adaptive          bool    `toml:"adaptive,omitempty"`          // learned routing: prefer historically-best provider per task
 	Redact            bool    `toml:"redact,omitempty"`            // privacy firewall: mask secrets/PII before forwarding
 	Inspect           bool    `toml:"inspect,omitempty"`           // capture full prompts/responses for the inspector + replay
 	AlertWebhook      string  `toml:"alert_webhook,omitempty"`     // Slack/Discord/generic webhook for budget alerts

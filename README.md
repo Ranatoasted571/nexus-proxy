@@ -163,6 +163,7 @@ nexus start --strategy fastest   # lowest latency
 nexus start --strategy manual    # explicit model mapping
 nexus start --budget 5           # cap spend at $5/day → free/local only when exceeded
 nexus start --cascade            # cheap-first: try cheapest, verify, escalate only on failure
+nexus start --adaptive           # learn the best provider per task type from real outcomes
 nexus start --semantic-cache     # serve near-identical tool-less requests from cache
 nexus start --redact             # privacy firewall: mask secrets/PII before forwarding
 nexus start --inspect            # capture prompts/responses for the dashboard inspector + replay
@@ -319,6 +320,17 @@ JSON), and **escalates to a stronger model only when the cheap one fails**.
 Most "standard" work succeeds on a free/cheap model; only the genuine failures
 cost premium money. Critical/security requests stay premium-first — never gambled
 on a weak model.
+
+### 🧠 Adaptive routing (learns your best provider)
+
+```bash
+nexus start --cascade --adaptive
+```
+
+NEXUS records whether each provider produced a usable answer for each task type
+(reusing the cascade's verification — no extra cost) and **reorders routing to
+try the historically-best provider first**. The more you use it, the better it
+routes — no manual tuning.
 
 ### 🧠 Cache-aware cost tracking
 

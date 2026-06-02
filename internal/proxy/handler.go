@@ -185,6 +185,10 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 	}
 
 	h.cascade = cfg.Cascade || appCfg.Routing.Cascade
+	if cfg.Adaptive || appCfg.Routing.Adaptive {
+		rt.SetAdaptive(true)
+		log.Info().Msg("Adaptive routing enabled — NEXUS learns the best provider per task type")
+	}
 	if cfg.Redact || appCfg.Routing.Redact {
 		h.firewall = &redactor{}
 		log.Info().Msg("Privacy firewall enabled — secrets/PII are masked before leaving for any provider")
@@ -396,10 +400,12 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if isRetryableStatus(resp.StatusCode) && i < len(chain)-1 {
+			h.router.RecordOutcome(cand.Name, complexity, false)
 			resp.Body.Close()
 			log.Warn().Str("provider", cand.Name).Int("status", resp.StatusCode).Msg("Retryable error, failing over to next provider")
 			continue
 		}
+		h.router.RecordOutcome(cand.Name, complexity, resp.StatusCode < 400)
 		switch {
 		case providers.IsOpenAICompatible(active.impl.Name()) && req.Stream:
 			h.relayOpenAIStream(w, active, req, resp, startTime, complexity)

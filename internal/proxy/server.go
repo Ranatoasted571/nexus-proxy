@@ -23,6 +23,7 @@ type Config struct {
 	SemanticCache  bool    // enable near-match (semantic) response caching
 	SemanticThreshold float64 // cosine threshold for semantic cache (0 ⇒ 0.95)
 	Cascade        bool    // cheap-first cascade with verification
+	Adaptive       bool    // learned routing: prefer historically-best provider per task
 	Redact         bool    // privacy firewall: mask secrets/PII before forwarding
 	Inspect        bool    // capture full prompts/responses for the inspector + replay
 	AlertWebhook   string  // Slack/Discord/generic webhook for budget alerts
