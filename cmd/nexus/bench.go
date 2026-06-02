@@ -132,33 +132,48 @@ func runBench(cmd *cobra.Command, args []string) error {
 		return avg(res[provNames[i]].cost, res[provNames[i]].n) < avg(res[provNames[j]].cost, res[provNames[j]].n)
 	})
 
-	fmt.Println()
-	color.White("  %-12s %4s %12s %9s %8s %10s", "PROVIDER", "OK", "avg cost", "avg lat", "out tok", "agreement")
-	color.White("  %s", strings.Repeat("─", 60))
-	var bestFree string
+	color.Cyan("\n  📊 Provider Report Card — benchmarked on %d of your real request(s)\n", len(samples))
+	color.White("  %-12s %4s %12s %9s %8s %11s", "PROVIDER", "OK", "avg cost", "avg lat", "out tok", "agreement")
+	color.White("  %s", strings.Repeat("─", 62))
+
+	bestValue, bestAgreeName := "", ""
+	bestAgree := -1.0
+	haveAgreement := false
 	for _, name := range provNames {
 		a := res[name]
 		if a.n == 0 {
 			color.Red("  %-12s %4s   (no successful responses)", name, "0")
 			continue
 		}
-		agreeStr := "—"
-		agreePct := 0.0
+		agreeStr, agreePct := "—", -1.0
 		if a.agreeN > 0 {
 			agreePct = a.agree / float64(a.agreeN) * 100
 			agreeStr = fmt.Sprintf("%.0f%%", agreePct)
+			haveAgreement = true
+			if agreePct > bestAgree {
+				bestAgree, bestAgreeName = agreePct, name
+			}
 		}
-		color.White("  %-12s %4d %11s$ %7.0fms %8.0f %9s",
+		color.White("  %-12s %4d %11s$ %7.0fms %8.0f %11s",
 			name, a.n, fmt.Sprintf("%.5f", avg(a.cost, a.n)), avg(a.latency, a.n), float64(a.toks)/float64(a.n), agreeStr)
-		if bestFree == "" && agreePct >= 80 {
-			bestFree = name
+		if bestValue == "" && (agreePct < 0 || agreePct >= 70) {
+			bestValue = name // cheapest provider (sorted) that stays close enough
 		}
 	}
+	if bestValue == "" && len(provNames) > 0 {
+		bestValue = provNames[0] // fall back to cheapest overall
+	}
+
 	fmt.Println()
-	if bestFree != "" {
-		color.Green("  → Recommended: %s — cheapest provider with ≥80%% agreement to your original outputs.", bestFree)
-	} else {
-		color.Yellow("  → Tip: pass --prompt to bench an ad-hoc prompt, or run with --inspect longer for agreement scores.")
+	if bestValue != "" {
+		color.Green("  🏆 Best value: %s — the cheapest provider that stays close to your originals.", bestValue)
+	}
+	if haveAgreement && bestAgreeName != "" {
+		color.White("  🎯 Closest to your original outputs: %s (%.0f%% agreement).", bestAgreeName, bestAgree)
+	}
+	color.HiBlack("\n  agreement = word-overlap vs your original captured response (a rough quality proxy).")
+	if !haveAgreement {
+		color.HiBlack("  Tip: run `nexus start --inspect` for a while so bench can score agreement on your own traffic.")
 	}
 	return nil
 }
