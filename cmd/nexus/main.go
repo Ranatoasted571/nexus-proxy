@@ -144,6 +144,7 @@ var (
 	flagInspect           bool
 	flagAlertWebhook      string
 	flagAlertThreshold    float64
+	flagMaxRequestUSD     float64
 )
 
 func init() {
@@ -162,6 +163,7 @@ func init() {
 	startCmd.Flags().BoolVar(&flagInspect, "inspect", false, "Store full prompts/responses locally so the dashboard can inspect + replay them")
 	startCmd.Flags().StringVar(&flagAlertWebhook, "alert-webhook", "", "Slack/Discord/generic webhook URL for daily-budget alerts")
 	startCmd.Flags().Float64Var(&flagAlertThreshold, "alert-threshold", 0, "Fraction of the daily budget that triggers a warning (default 0.8)")
+	startCmd.Flags().Float64Var(&flagMaxRequestUSD, "max-request-usd", 0, "Guardrail: downgrade a single request estimated above this to free/local")
 
 	topCmd.Flags().IntVar(&flagTopPort, "ui", 2222, "Dashboard port to read from")
 	topCmd.Flags().BoolVar(&flagTopOnce, "once", false, "Render a single frame and exit (for scripts/CI)")
@@ -231,6 +233,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		Inspect:           flagInspect,
 		AlertWebhook:      flagAlertWebhook,
 		AlertThreshold:    flagAlertThreshold,
+		MaxRequestUSD:     flagMaxRequestUSD,
 	}
 
 	proxySrv, err := proxy.New(cfg, db, broker)

@@ -15,6 +15,18 @@ type Config struct {
 	Dashboard Dashboard  `toml:"dashboard"`
 	Routing   Routing    `toml:"routing"`
 	Providers []Provider `toml:"providers"`
+	Rules     []Rule     `toml:"rules"`
+}
+
+// Rule is a declarative routing override. When all of its (non-empty) match
+// conditions hold, the request is pinned to UseProvider or restricted to UseTier.
+type Rule struct {
+	WhenModelContains  string `toml:"when_model_contains,omitempty"`
+	WhenPromptContains string `toml:"when_prompt_contains,omitempty"`
+	WhenComplexity     string `toml:"when_complexity,omitempty"` // simple|standard|complex|critical
+	WhenHasTools       *bool  `toml:"when_has_tools,omitempty"`
+	UseProvider        string `toml:"use_provider,omitempty"`
+	UseTier            string `toml:"use_tier,omitempty"`
 }
 
 type Proxy struct {
@@ -36,6 +48,7 @@ type Routing struct {
 	Inspect           bool    `toml:"inspect,omitempty"`           // capture full prompts/responses for the inspector + replay
 	AlertWebhook      string  `toml:"alert_webhook,omitempty"`     // Slack/Discord/generic webhook for budget alerts
 	AlertThreshold    float64 `toml:"alert_threshold,omitempty"`   // fraction of budget that triggers a warning (0 ⇒ 0.8)
+	MaxRequestUSD     float64 `toml:"max_request_usd,omitempty"`   // guardrail: downgrade a single request estimated above this to free/local
 }
 
 // Provider is a single configured LLM provider.

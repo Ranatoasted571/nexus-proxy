@@ -428,6 +428,31 @@ every provider and prints a cost × latency × output-tokens × *agreement* tabl
 recommends the cheapest provider that stays close. Stop guessing which model to
 use — measure it on your own traffic.
 
+### 🧩 Routing rules + 🛡️ cost guardrail
+
+Declare routing overrides in `config.toml` — no rebuild:
+
+```toml
+[[rules]]
+when_prompt_contains = "production"   # never gamble prod work
+use_tier = "premium"
+
+[[rules]]
+when_model_contains = "haiku"
+use_provider = "groq"                 # pin trivial calls to a free provider
+```
+
+A rule matches when **all** its `when_*` conditions hold (`when_model_contains`,
+`when_prompt_contains`, `when_complexity`, `when_has_tools`) and then pins the
+request to `use_provider` or `use_tier`.
+
+And cap the cost of any single request — anything estimated above the cap is
+automatically downgraded to a free/local model:
+
+```bash
+nexus start --max-request-usd 0.50    # or routing.max_request_usd
+```
+
 ### 👥 Team mode
 
 Point a whole team at one NEXUS and they automatically share its response cache

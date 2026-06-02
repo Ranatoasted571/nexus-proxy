@@ -82,6 +82,8 @@ type Handler struct {
 	cascade    bool           // cheap-first cascade with verification
 	firewall   *redactor      // privacy firewall (nil = off)
 	inspect    bool           // capture full prompt/response for the inspector
+	rules      []config.Rule  // declarative routing overrides
+	maxReqUSD  float64        // guardrail: downgrade a single request above this
 	stopHealth chan struct{}
 }
 
@@ -196,6 +198,17 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 	h.inspect = cfg.Inspect || appCfg.Routing.Inspect
 	if h.inspect {
 		log.Info().Msg("Request inspector enabled — full prompts/responses are stored locally for replay")
+	}
+	h.rules = appCfg.Rules
+	if len(h.rules) > 0 {
+		log.Info().Int("rules", len(h.rules)).Msg("Routing rules loaded")
+	}
+	h.maxReqUSD = cfg.MaxRequestUSD
+	if h.maxReqUSD <= 0 {
+		h.maxReqUSD = appCfg.Routing.MaxRequestUSD
+	}
+	if h.maxReqUSD > 0 {
+		log.Info().Float64("max_request_usd", h.maxReqUSD).Msg("Cost guardrail enabled — pricey single requests are downgraded to free/local")
 	}
 
 	if len(active) == 0 {
@@ -354,20 +367,51 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Explicit provider pin (dashboard replay/compare, or "force provider X").
+	// Routing rules + cost guardrail need the prompt text.
+	var ptext string
+	if len(h.rules) > 0 || h.maxReqUSD > 0 {
+		ptext, _, _ = promptText(body)
+	}
+
+	// Explicit provider pin (header), then config rules (provider or tier).
 	forced := r.Header.Get("X-Nexus-Provider")
+	bypassCascade := false
+	if forced == "" && len(h.rules) > 0 {
+		if rp, rt := applyRules(h.rules, req.Model, ptext, complexity, hasTools); rp != "" {
+			if _, ok := h.providers[rp]; ok {
+				forced = rp
+			}
+		} else if rt != "" {
+			chain = filterByTier(chain, rt)
+			bypassCascade = true
+		}
+	}
 	if forced != "" {
 		if _, ok := h.providers[forced]; !ok {
 			h.writeError(w, http.StatusBadRequest, "X-Nexus-Provider: unknown provider "+forced)
 			return
 		}
 		chain = []*router.Provider{{Name: forced}}
+		bypassCascade = true
+	}
+
+	// Cost guardrail: downgrade a single request estimated to exceed the cap.
+	if !bypassCascade && h.maxReqUSD > 0 && len(chain) > 0 {
+		if head := h.providers[chain[0].Name]; head != nil {
+			if est := head.impl.Pricing().CalculateCost(estimateTokens(ptext), req.MaxTokens); est > h.maxReqUSD {
+				if cheap := freeLocalOnly(chain); len(cheap) > 0 {
+					log.Warn().Float64("est_usd", est).Float64("cap", h.maxReqUSD).Msg("Cost guardrail: downgrading to free/local")
+					chain = cheap
+					bypassCascade = true
+				}
+			}
+		}
 	}
 
 	// Cheap-first cascade: try the cheapest capable provider, verify its output,
 	// and escalate to a stronger model only on failure. Falls through to the
 	// normal failover path if every cascade candidate is unreachable.
-	if h.cascade && forced == "" {
+	if h.cascade && !bypassCascade {
 		cc := h.router.CascadeChain(complexity)
 		if h.budget.Over() {
 			if cheap := freeLocalOnly(cc); len(cheap) > 0 {
