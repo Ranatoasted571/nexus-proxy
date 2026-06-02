@@ -47,6 +47,24 @@ func TestProviderOverrideUnknownProvider(t *testing.T) {
 	}
 }
 
+func TestTierHeaderPinsTier(t *testing.T) {
+	var aHits, bHits int32
+	a := countingOAIServer("a", &aHits)
+	b := countingOAIServer("b", &bHits)
+	defer a.Close()
+	defer b.Close()
+	h := buildTestHandler(t, []testProv{{"a", "free", a.URL}, {"b", "premium", b.URL}})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"claude-haiku-4-5","max_tokens":50,"messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("X-Nexus-Tier", "premium") // an agent harness pinning this skill to premium
+	h.HandleMessages(rec, req)
+
+	if bHits != 1 || aHits != 0 {
+		t.Fatalf("X-Nexus-Tier: premium should route to the premium provider; a=%d b=%d", aHits, bHits)
+	}
+}
+
 func TestInspectCapturesPromptResponse(t *testing.T) {
 	srv := openAIServer(http.StatusOK, "captured answer")
 	defer srv.Close()

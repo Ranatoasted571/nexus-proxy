@@ -376,8 +376,11 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 
 	// Explicit provider pin (header), then config rules (provider or tier).
 	forced := r.Header.Get("X-Nexus-Provider")
+	headerTier := r.Header.Get("X-Nexus-Tier")
 	bypassCascade := false
-	if forced == "" && len(h.rules) > 0 {
+
+	// Config rules apply only when no explicit per-request header override is set.
+	if forced == "" && headerTier == "" && len(h.rules) > 0 {
 		if rp, rt := applyRules(h.rules, req.Model, ptext, complexity, hasTools); rp != "" {
 			if _, ok := h.providers[rp]; ok {
 				forced = rp
@@ -393,6 +396,11 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		chain = []*router.Provider{{Name: forced}}
+		bypassCascade = true
+	} else if headerTier != "" {
+		// Per-request tier pin — lets an agent harness (e.g. ECC) route a skill:
+		// X-Nexus-Tier: premium for architecture, free for lint/format, …
+		chain = filterByTier(chain, headerTier)
 		bypassCascade = true
 	}
 

@@ -466,6 +466,22 @@ automatically downgraded to a free/local model:
 nexus start --max-request-usd 0.50    # or routing.max_request_usd
 ```
 
+### 🤝 Use with agent harnesses (ECC, …)
+
+NEXUS lives *under* your harness, so it stacks with agent-capability toolkits
+like [ECC](https://github.com/affaan-m/ECC): install ECC in Claude Code, point
+the harness at NEXUS (`nexus code`), and every skill/subagent call is routed,
+cached, cost-tracked and privacy-firewalled. For per-skill routing, NEXUS honors
+two headers a harness hook can set:
+
+```
+X-Nexus-Tier: premium     # pin this call to premium (architecture, security)
+X-Nexus-Tier: free        # pin to free (lint, format, commit messages)
+X-Nexus-Provider: groq    # pin to one provider
+```
+
+Full guide: **[docs/agent-harnesses.md](docs/agent-harnesses.md)**.
+
 ### 👥 Team mode
 
 Point a whole team at one NEXUS and they automatically share its response cache
