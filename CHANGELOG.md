@@ -3,7 +3,7 @@
 High-level summary of each release. Full, commit-level notes are on the
 [GitHub releases page](https://github.com/lynuxis2026-pixel/nexus-proxy/releases).
 
-## Unreleased
+## v0.5.0
 
 - **6 more providers (24 → 30):** Baseten, Featherless, kluster.ai, Venice
   (privacy-focused), Friendli, Chutes — all OpenAI-compatible, with env
