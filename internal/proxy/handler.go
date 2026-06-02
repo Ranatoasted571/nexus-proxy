@@ -128,6 +128,10 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 			ModelMap:    pc.ModelMap,
 			InputPer1M:  pc.InputPer1M,
 			OutputPer1M: pc.OutputPer1M,
+			OffPeakInputPer1M:  pc.OffPeakInputPer1M,
+			OffPeakOutputPer1M: pc.OffPeakOutputPer1M,
+			OffPeakStartUTC:    pc.OffPeakStartUTC,
+			OffPeakEndUTC:      pc.OffPeakEndUTC,
 			Region:      pc.Region,
 			Project:     pc.Project,
 			APIVersion:  pc.APIVersion,
@@ -707,7 +711,7 @@ func resolveAnthropicKeyFor(configured string, origHeaders http.Header) string {
 func (h *Handler) logResult(active *activeProvider, req AnthropicRequest, complexity router.Complexity, u tokenUsage, respBody []byte, status int, latency time.Duration, stream bool) {
 	now := time.Now()
 	pricing := active.impl.Pricing()
-	cost := pricing.CalculateCostFull(u.In, u.Out, u.CacheRead, u.CacheWrite)
+	cost := pricing.CalculateCostFullAt(u.In, u.Out, u.CacheRead, u.CacheWrite, now) // off-peak-aware
 	cacheSaved := pricing.CacheReadSavings(u.CacheRead)
 	h.budget.Add(cost)
 	rec := &storage.Request{

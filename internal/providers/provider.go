@@ -29,6 +29,40 @@ type PricingInfo struct {
 	// writes at 1.25× input (Anthropic-style).
 	CacheReadPer1M  float64
 	CacheWritePer1M float64
+	// Optional off-peak pricing (e.g. DeepSeek's discount window). When
+	// OffPeakStartUTC != OffPeakEndUTC, the off-peak rates apply during the
+	// [start, end) UTC hour window (wraps past midnight if start > end).
+	OffPeakInputPer1M  float64
+	OffPeakOutputPer1M float64
+	OffPeakStartUTC    int
+	OffPeakEndUTC      int
+}
+
+// inOffPeak reports whether t falls in this provider's off-peak window.
+func (p PricingInfo) inOffPeak(t time.Time) bool {
+	if p.OffPeakStartUTC == p.OffPeakEndUTC {
+		return false
+	}
+	h := t.UTC().Hour()
+	if p.OffPeakStartUTC < p.OffPeakEndUTC {
+		return h >= p.OffPeakStartUTC && h < p.OffPeakEndUTC
+	}
+	return h >= p.OffPeakStartUTC || h < p.OffPeakEndUTC // wraps midnight
+}
+
+// CalculateCostFullAt prices a usage breakdown, applying the off-peak input/output
+// rates when t falls in the off-peak window.
+func (p PricingInfo) CalculateCostFullAt(in, out, cacheRead, cacheWrite int, t time.Time) float64 {
+	pr := p
+	if p.inOffPeak(t) {
+		if p.OffPeakInputPer1M > 0 {
+			pr.InputPer1M = p.OffPeakInputPer1M
+		}
+		if p.OffPeakOutputPer1M > 0 {
+			pr.OutputPer1M = p.OffPeakOutputPer1M
+		}
+	}
+	return pr.CalculateCostFull(in, out, cacheRead, cacheWrite)
 }
 
 func (p PricingInfo) cacheReadRate() float64 {

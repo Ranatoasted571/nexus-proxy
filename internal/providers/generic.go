@@ -17,10 +17,18 @@ type Spec struct {
 	ModelMap    map[string]string // Claude model → provider model ("default" = catch-all)
 	InputPer1M  float64
 	OutputPer1M float64
+	// Optional off-peak pricing window (UTC hours) + rates.
+	OffPeakInputPer1M  float64
+	OffPeakOutputPer1M float64
+	OffPeakStartUTC    int
+	OffPeakEndUTC      int
 	Region      string // AWS Bedrock / Google Vertex
 	Project     string // Google Vertex
 	APIVersion  string // Azure OpenAI
 }
+
+// hasOffPeak reports whether the spec defines an off-peak window.
+func (s Spec) hasOffPeak() bool { return s.OffPeakStartUTC != s.OffPeakEndUTC }
 
 // Authorizer lets a provider set its own auth header(s) on an outgoing request
 // (e.g. Azure's api-key header, a Vertex bearer token, or AWS SigV4 for Bedrock).
@@ -73,7 +81,7 @@ func New(spec Spec) (Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(spec.ModelMap) > 0 || spec.InputPer1M > 0 || spec.OutputPer1M > 0 || spec.Tier != "" {
+	if len(spec.ModelMap) > 0 || spec.InputPer1M > 0 || spec.OutputPer1M > 0 || spec.Tier != "" || spec.hasOffPeak() {
 		return &overridden{Provider: base, spec: spec}, nil
 	}
 	return base, nil
@@ -100,6 +108,12 @@ func (o *overridden) Pricing() PricingInfo {
 	}
 	if o.spec.OutputPer1M > 0 {
 		p.OutputPer1M = o.spec.OutputPer1M
+	}
+	if o.spec.hasOffPeak() {
+		p.OffPeakInputPer1M = o.spec.OffPeakInputPer1M
+		p.OffPeakOutputPer1M = o.spec.OffPeakOutputPer1M
+		p.OffPeakStartUTC = o.spec.OffPeakStartUTC
+		p.OffPeakEndUTC = o.spec.OffPeakEndUTC
 	}
 	return p
 }
@@ -135,7 +149,11 @@ func newGeneric(spec Spec) *Generic {
 		apiKey:   spec.APIKey,
 		models:   spec.Models,
 		modelMap: spec.ModelMap,
-		pricing:  PricingInfo{InputPer1M: spec.InputPer1M, OutputPer1M: spec.OutputPer1M},
+		pricing: PricingInfo{
+			InputPer1M: spec.InputPer1M, OutputPer1M: spec.OutputPer1M,
+			OffPeakInputPer1M: spec.OffPeakInputPer1M, OffPeakOutputPer1M: spec.OffPeakOutputPer1M,
+			OffPeakStartUTC: spec.OffPeakStartUTC, OffPeakEndUTC: spec.OffPeakEndUTC,
+		},
 	}
 }
 

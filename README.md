@@ -291,6 +291,23 @@ name = "groq"
 "default"           = "llama-3.3-70b-versatile"
 ```
 
+### Off-peak pricing
+
+Some providers (e.g. DeepSeek) discount heavily during an off-peak UTC window.
+Tell NEXUS and your cost + savings reflect the real, lower price during that
+window (UTC hours; wraps past midnight if start > end):
+
+```toml
+[[providers]]
+name = "deepseek"
+input_per_1m  = 0.27
+output_per_1m = 1.10
+off_peak_input_per_1m  = 0.135   # ~50% off
+off_peak_output_per_1m = 0.55
+off_peak_start_utc = 16
+off_peak_end_utc   = 0           # 16:00 → 00:00 UTC
+```
+
 ### Automatic failover
 
 If a provider returns `429` or a `5xx`, NEXUS transparently fails over to the

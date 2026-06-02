@@ -70,6 +70,12 @@ type Provider struct {
 	InputPer1M  float64           `toml:"input_per_1m,omitempty"`  // optional pricing override (USD/1M)
 	OutputPer1M float64           `toml:"output_per_1m,omitempty"` // optional pricing override (USD/1M)
 
+	// Optional off-peak pricing (e.g. DeepSeek discount window), UTC hours.
+	OffPeakInputPer1M  float64 `toml:"off_peak_input_per_1m,omitempty"`
+	OffPeakOutputPer1M float64 `toml:"off_peak_output_per_1m,omitempty"`
+	OffPeakStartUTC    int     `toml:"off_peak_start_utc,omitempty"`
+	OffPeakEndUTC      int     `toml:"off_peak_end_utc,omitempty"`
+
 	// Enterprise providers:
 	Region     string `toml:"region,omitempty"`      // AWS Bedrock / Google Vertex region
 	Project    string `toml:"project,omitempty"`     // Google Vertex project ID
