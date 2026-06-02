@@ -4,11 +4,24 @@
 - **Fase**: Sprint 4 compleet — MVP klaar; build/vet/test groen, cross-compile werkt
 - **Laatste update**: Juni 2026
 - **Sprint**: 4 (polish & release) ✓ — rest: handmatige release-stappen (zie onder)
-- **Providers**: 24 ingebouwd + generieke "custom" provider (élke OpenAI-compatibele endpoint).
+- **Providers**: 30 ingebouwd + generieke "custom" provider (élke OpenAI-compatibele endpoint).
   Built-in: anthropic, openai, xai, deepseek, mistral, cohere, together, fireworks, openrouter,
-  deepinfra, perplexity, novita, hyperbolic, nebius, moonshot, zhipu, ai21, lambda, groq, gemini,
-  cerebras, sambanova, nvidia, ollama
+  deepinfra, perplexity, novita, hyperbolic, nebius, moonshot, zhipu, ai21, lambda, baseten,
+  featherless, kluster, venice, friendli, chutes, groq, gemini, cerebras, sambanova, nvidia, ollama
 - **Toolchain**: Go 1.26.3 (winget) + Node 20 (nodejs op PATH); go.mod blijft op `go 1.22`
+
+## [2026-06] Contributor-area pass (provider/UX/classifier/CI)
+- **+6 providers (24 → 30)**: baseten, featherless, kluster, venice (privacy), friendli,
+  chutes — allemaal OpenAI-compatibel, base-URLs geverifieerd tegen provider-docs;
+  env-autodiscovery toegevoegd (+ ontbrekende novita/hyperbolic/nebius/lambda keys).
+- **Classifier herschreven** (`internal/router/classifier.go`): heldere policy i.p.v.
+  score-stacking. Intent-keywords alleen uit *user*-tekst; trivial tool-less → free;
+  gewone coding/tool-use → goedkope Standard; architecture/security/large/Opus → premium.
+  Volledige testmatrix (`classifier_test.go`).
+- **Dashboard**: privacy-kaart "secrets masked · 0 leaked" (redacted_total nu in
+  /api/stats + SSE) + "routing mix"-balk (complexity-verdeling). Live geverifieerd
+  met geseede demo-DB + screenshot.
+- **Windows-CI**: testjob is nu ubuntu+windows matrix; pad-test voor DB-open met spatie.
 
 ## Vóór publicatie (handmatig)
 - [ ] Module-pad `github.com/yourusername/nexus` → echte repo (go.mod + alle imports + `yourusername` in README/.goreleaser.yml/install-scripts)

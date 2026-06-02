@@ -3,6 +3,20 @@
 High-level summary of each release. Full, commit-level notes are on the
 [GitHub releases page](https://github.com/lynuxis2026-pixel/nexus-proxy/releases).
 
+## Unreleased
+
+- **6 more providers (24 → 30):** Baseten, Featherless, kluster.ai, Venice
+  (privacy-focused), Friendli, Chutes — all OpenAI-compatible, with env
+  auto-discovery.
+- **Smarter complexity classifier:** an explainable policy (security/architecture
+  keywords, large-context, Opus → premium; trivial tool-less → free; ordinary
+  coding/tool-use → cheap Standard) that reads intent from *user* text only.
+  Routes the bulk of agentic coding to the cheap tier; full test matrix.
+- **Dashboard:** a privacy "secrets masked · 0 leaked" card and a "routing mix"
+  bar showing how the classifier split recent traffic.
+- **Windows CI:** the test suite now runs on an ubuntu + windows matrix, plus a
+  spaced-path DB-open guard.
+
 ## v0.4.1
 
 - **Off-peak-aware pricing** — prices requests at a provider's off-peak rate
