@@ -187,6 +187,18 @@ func FromConfig(name, apiKey, baseURL string, models []string) (Provider, error)
 		return NewAI21(apiKey), nil
 	case "lambda":
 		return NewLambda(apiKey), nil
+	case "baseten":
+		return NewBaseten(apiKey), nil
+	case "featherless":
+		return NewFeatherless(apiKey), nil
+	case "kluster":
+		return NewKluster(apiKey), nil
+	case "venice":
+		return NewVenice(apiKey), nil
+	case "friendli":
+		return NewFriendli(apiKey), nil
+	case "chutes":
+		return NewChutes(apiKey), nil
 	case "ollama":
 		return NewOllama(baseURL, model), nil
 	default:
@@ -199,7 +211,7 @@ func DefaultTier(name string) string {
 	switch strings.ToLower(name) {
 	case "anthropic", "openai", "xai":
 		return TierPremium
-	case "deepseek", "mistral", "together", "openrouter", "cohere", "fireworks", "perplexity", "deepinfra", "novita", "hyperbolic", "nebius", "moonshot", "zhipu", "ai21", "lambda":
+	case "deepseek", "mistral", "together", "openrouter", "cohere", "fireworks", "perplexity", "deepinfra", "novita", "hyperbolic", "nebius", "moonshot", "zhipu", "ai21", "lambda", "baseten", "featherless", "kluster", "venice", "friendli", "chutes":
 		return TierStandard
 	case "groq", "gemini", "cerebras", "sambanova", "nvidia":
 		return TierFree
@@ -259,6 +271,18 @@ func DefaultModels(name string) []string {
 		return []string{"jamba-large-1.7", "jamba-mini-1.7"}
 	case "lambda":
 		return []string{"llama-3.3-70b-instruct-fp8"}
+	case "baseten":
+		return []string{"deepseek-ai/DeepSeek-V3.1"}
+	case "featherless":
+		return []string{"meta-llama/Meta-Llama-3.1-70B-Instruct"}
+	case "kluster":
+		return []string{"klusterai/Meta-Llama-3.3-70B-Instruct-Turbo"}
+	case "venice":
+		return []string{"llama-3.3-70b"}
+	case "friendli":
+		return []string{"meta-llama-3.3-70b-instruct"}
+	case "chutes":
+		return []string{"deepseek-ai/DeepSeek-V3"}
 	case "ollama":
 		return []string{"codellama:13b"}
 	default:

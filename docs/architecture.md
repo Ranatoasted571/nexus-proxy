@@ -42,7 +42,7 @@ dashboard server, and the embedded web UI, sharing a local SQLite database.
 | `cmd/nexus` | Cobra CLI: `start`, `code`, `add`, `doctor`, `top`, `bench`, `report`, `mcp`, `status`, `logs`, `cost`, `models`, `config`, `version` |
 | `internal/proxy` | HTTP servers + the request pipeline: `handler`, `gateway` (OpenAI inbound), `transformer`, `stream`, `openai`, `cascade`, `firewall`, `semantic`, `cache`, `rules`, `usage` |
 | `internal/router` | Task classifier, routing strategies (auto/cheapest/fastest/manual), cheap-first `CascadeChain`, and adaptive learned ordering |
-| `internal/providers` | The `Provider` interface + 24 built-ins, a config-driven generic provider, enterprise providers (Azure/Vertex/Bedrock + SigV4), pricing (cache-aware + off-peak) |
+| `internal/providers` | The `Provider` interface + 30 built-ins, a config-driven generic provider, enterprise providers (Azure/Vertex/Bedrock + SigV4), pricing (cache-aware + off-peak) |
 | `internal/storage` | Pure-Go SQLite: request log, aggregated stats, savings, leaderboard, request detail |
 | `internal/dashboard` | SSE broker, JSON API, embedded Svelte build (`go:embed`) |
 | `internal/config` | TOML config, `env:` key resolution, env auto-discovery |

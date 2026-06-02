@@ -230,7 +230,7 @@ nexus version            # show version
 ## Supported providers
 
 NEXUS speaks the Anthropic API to Claude Code and translates to each provider's
-API under the hood. **24 providers built in** — plus any OpenAI-compatible
+API under the hood. **30 providers built in** — plus any OpenAI-compatible
 endpoint via a custom provider (see below).
 
 | Provider | Add it | Tier |
@@ -253,6 +253,12 @@ endpoint via a custom provider (see below).
 | Zhipu (GLM) | `nexus add zhipu <key>` | Standard |
 | AI21 (Jamba) | `nexus add ai21 <key>` | Standard |
 | Lambda | `nexus add lambda <key>` | Standard |
+| Baseten | `nexus add baseten <key>` | Standard |
+| Featherless | `nexus add featherless <key>` | Standard |
+| kluster.ai | `nexus add kluster <key>` | Standard |
+| Venice (private) | `nexus add venice <key>` | Standard |
+| Friendli | `nexus add friendli <key>` | Standard |
+| Chutes | `nexus add chutes <key>` | Standard |
 | Groq | `nexus add groq <key>` | Free |
 | Gemini | `nexus add gemini <key>` | Free |
 | Cerebras | `nexus add cerebras <key>` | Free |

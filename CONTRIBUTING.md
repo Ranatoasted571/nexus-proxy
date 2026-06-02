@@ -44,7 +44,7 @@ Please add tests for new behavior. The core logic packages
 | `cmd/nexus` | CLI entrypoint (cobra) |
 | `internal/proxy` | HTTP servers + the request pipeline: handler, gateway (OpenAI inbound), transformer, streaming, cascade, privacy firewall, semantic cache, rules, usage |
 | `internal/router` | task classifier, routing strategies, cheap-first cascade chain, adaptive learned ordering |
-| `internal/providers` | the `Provider` interface + 24 built-ins, a config-driven generic provider, enterprise providers (Azure/Vertex/Bedrock + SigV4), cache-aware + off-peak pricing |
+| `internal/providers` | the `Provider` interface + 30 built-ins, a config-driven generic provider, enterprise providers (Azure/Vertex/Bedrock + SigV4), cache-aware + off-peak pricing |
 | `internal/storage` | pure-Go SQLite: request log, stats, savings, leaderboard, detail |
 | `internal/dashboard` | dashboard server, SSE broker, JSON API, embedded Svelte build |
 | `internal/config` | TOML config, `env:` key resolution, env auto-discovery |

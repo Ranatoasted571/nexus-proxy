@@ -175,6 +175,16 @@ var knownEnvKeys = []struct {
 	{"moonshot", []string{"MOONSHOT_API_KEY"}},
 	{"zhipu", []string{"ZHIPU_API_KEY"}},
 	{"ai21", []string{"AI21_API_KEY"}},
+	{"novita", []string{"NOVITA_API_KEY"}},
+	{"hyperbolic", []string{"HYPERBOLIC_API_KEY"}},
+	{"nebius", []string{"NEBIUS_API_KEY"}},
+	{"lambda", []string{"LAMBDA_API_KEY", "LAMBDA_CLOUD_API_KEY"}},
+	{"baseten", []string{"BASETEN_API_KEY"}},
+	{"featherless", []string{"FEATHERLESS_API_KEY"}},
+	{"kluster", []string{"KLUSTER_API_KEY"}},
+	{"venice", []string{"VENICE_API_KEY"}},
+	{"friendli", []string{"FRIENDLI_TOKEN", "FRIENDLI_API_KEY"}},
+	{"chutes", []string{"CHUTES_API_KEY"}},
 }
 
 // DiscoverFromEnv returns providers whose API keys are present in the

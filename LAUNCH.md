@@ -62,7 +62,7 @@ coding tool and the providers:
    Not the crowd's preferences; yours.
 
 Plus the table stakes: speaks both the Anthropic and OpenAI APIs (Claude Code,
-Cursor, aider, Cline — one env var), 24 providers + any OpenAI-compatible endpoint,
+Cursor, aider, Cline — one env var), 30 providers + any OpenAI-compatible endpoint,
 semantic cache, failover, budget caps, a live local dashboard, and a `nexus report`
 that prints "$X saved · N secrets masked before leaving your machine · 0 leaked."
 
@@ -98,7 +98,7 @@ what I actually wanted:
   ranks them by cost × latency × agreement on YOUR work — not a generic benchmark.
 - Cheap-first cascade with verification + adaptive routing that learns which
   provider wins your task types.
-- One Go binary, pure-Go SQLite, no Docker, no cloud, no token markup. 24 providers
+- One Go binary, pure-Go SQLite, no Docker, no cloud, no token markup. 30 providers
   + any OpenAI-compatible endpoint. Works with Claude Code, Cursor, aider, Cline via
   one env var (speaks both Anthropic + OpenAI APIs).
 

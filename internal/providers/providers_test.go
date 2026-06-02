@@ -10,7 +10,9 @@ func TestFromConfigKnownAndUnknown(t *testing.T) {
 	known := []string{
 		"anthropic", "openai", "deepseek", "groq", "gemini", "mistral", "together",
 		"openrouter", "cohere", "xai", "fireworks", "perplexity", "deepinfra",
-		"cerebras", "sambanova", "ollama",
+		"cerebras", "sambanova", "novita", "hyperbolic", "nebius", "nvidia",
+		"moonshot", "zhipu", "ai21", "lambda", "baseten", "featherless", "kluster",
+		"venice", "friendli", "chutes", "ollama",
 	}
 	for _, name := range known {
 		p, err := FromConfig(name, "key", "", nil)
