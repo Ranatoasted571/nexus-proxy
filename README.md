@@ -21,6 +21,12 @@ nexus start
 > Dashboard: http://localhost:2222
 
 ```bash
+nexus code   # starts NEXUS (if needed) + launches Claude Code through it — one command
+```
+
+…or wire it up manually:
+
+```bash
 export ANTHROPIC_BASE_URL=http://localhost:3000
 export ANTHROPIC_API_KEY=nexus-local
 claude  # Claude Code now uses NEXUS
@@ -188,6 +194,7 @@ Open `http://localhost:2222` after starting NEXUS.
 
 ```bash
 nexus start              # start proxy + dashboard
+nexus code               # start NEXUS (if needed) + launch Claude Code through it
 nexus add <provider> <key>  # add a provider (key can be "k1,k2,k3" for a pool)
 nexus doctor             # diagnose setup, test every provider, suggest fixes
 nexus top                # live terminal dashboard (htop for your LLM traffic)

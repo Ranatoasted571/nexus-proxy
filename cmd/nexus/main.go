@@ -180,7 +180,10 @@ func init() {
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(topCmd)
 	rootCmd.AddCommand(mcpCmd)
+	rootCmd.AddCommand(codeCmd)
 	rootCmd.AddCommand(versionCmd)
+
+	codeCmd.Flags().IntVar(&flagCodePort, "port", 3000, "Proxy port NEXUS should use")
 }
 
 func main() {
