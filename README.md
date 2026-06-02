@@ -2,14 +2,17 @@
 
 ![NEXUS live dashboard — routing requests to the cheapest model in real time](docs/dashboard.gif)
 
-**Smart proxy + live dashboard for Claude Code — and every AI coding tool.**  
-Route Claude Code, Cursor, aider, and any OpenAI/Anthropic app to the cheapest capable LLM — automatically.
+**The local-first privacy + intelligence layer for Claude Code — and every AI coding tool.**  
+NEXUS keeps your code and secrets **on your machine**, **learns** which model wins *your* tasks, **proves** the savings on your *own* traffic — and routes every request to the cheapest capable model. One Go binary. No cloud. No markup.
 
 [![Release](https://img.shields.io/github/v/release/lynuxis2026-pixel/nexus-proxy?color=7c3aed)](https://github.com/lynuxis2026-pixel/nexus-proxy/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/lynuxis2026-pixel/nexus-proxy/ci.yml?branch=main&label=CI)](https://github.com/lynuxis2026-pixel/nexus-proxy/actions)
 [![License: MIT](https://img.shields.io/github/license/lynuxis2026-pixel/nexus-proxy?color=06b6d4)](LICENSE)
 [![Go](https://img.shields.io/github/go-mod/go-version/lynuxis2026-pixel/nexus-proxy)](go.mod)
 [![Stars](https://img.shields.io/github/stars/lynuxis2026-pixel/nexus-proxy?style=social)](https://github.com/lynuxis2026-pixel/nexus-proxy/stargazers)
+
+> **Not just another "cheap Claude Code" proxy.**  
+> OpenRouter routes to the cheapest provider. NotDiamond predicts a model from the crowd's preferences. **NEXUS** is the only one that **learns which provider wins _your_ tasks**, **verifies** the cheap answer before trusting it, **redacts secrets before they ever leave your machine**, and **proves** it by benchmarking every provider on _your own_ traffic — as one local binary, no markup, built for Claude Code.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lynuxis2026-pixel/nexus-proxy/main/install.sh | sh
@@ -36,9 +39,15 @@ claude  # Claude Code now uses NEXUS
 
 ## Why NEXUS?
 
-Claude Code is the best agentic coding CLI. But Anthropic's API costs add up fast.
+Routing Claude Code to cheaper models is a commodity now. NEXUS is built around
+the four things no one else does in one local tool:
 
-NEXUS sits between Claude Code and the providers — intelligently routing requests to the cheapest model that can handle the task.
+- **🔒 Private** — a firewall masks API keys, secrets and PII *before* a request leaves for any third-party model, and restores them in the response. Your code and keys never leave your machine. (Cloud gateways structurally can't offer this.)
+- **🧪 Proven** — `nexus bench` replays your *real* captured traffic across every provider and shows cost × latency × agreement, so you pick a model by **measuring**, not guessing.
+- **🧠 Self-learning** — adaptive routing learns which provider wins *your* task types from real outcomes — not the crowd's generic preferences.
+- **📦 Local** — one signed Go binary, pure-Go SQLite. No Python, no Docker, no Postgres, no cloud, no token markup, no supply-chain surface.
+
+…and yes, it cuts the bill:
 
 | Task | Without NEXUS | With NEXUS |
 |------|--------------|------------|
@@ -46,6 +55,9 @@ NEXUS sits between Claude Code and the providers — intelligently routing reque
 | Code refactor | Claude Sonnet $0.08 | DeepSeek **$0.002** |
 | Architecture | Claude Opus $0.45 | Claude Opus $0.45 |
 | **Monthly total** | **~$120** | **~$8** |
+
+`nexus report` turns this into one shareable artifact: **$ saved + % cheaper +
+"N secrets masked before leaving your machine · 0 leaked."**
 
 ---
 
@@ -201,6 +213,7 @@ nexus doctor             # diagnose setup, test every provider, suggest fixes
 nexus top                # live terminal dashboard (htop for your LLM traffic)
 nexus mcp                # run as an MCP server (Claude Code can query your usage)
 nexus bench              # benchmark every provider on your real captured traffic
+nexus report             # Trust & Savings report (what you saved + what never leaked)
 nexus status             # provider health check
 nexus models             # show Claude→provider model mapping
 nexus logs               # recent requests
