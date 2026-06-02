@@ -141,6 +141,8 @@ var (
 	flagTopPort           int
 	flagTopOnce           bool
 	flagInspect           bool
+	flagAlertWebhook      string
+	flagAlertThreshold    float64
 )
 
 func init() {
@@ -156,6 +158,8 @@ func init() {
 	startCmd.Flags().BoolVar(&flagCascade, "cascade", false, "Cheap-first cascade: try the cheapest capable model, verify, escalate on failure")
 	startCmd.Flags().BoolVar(&flagRedact, "redact", false, "Privacy firewall: mask secrets/API keys/PII before forwarding to any provider")
 	startCmd.Flags().BoolVar(&flagInspect, "inspect", false, "Store full prompts/responses locally so the dashboard can inspect + replay them")
+	startCmd.Flags().StringVar(&flagAlertWebhook, "alert-webhook", "", "Slack/Discord/generic webhook URL for daily-budget alerts")
+	startCmd.Flags().Float64Var(&flagAlertThreshold, "alert-threshold", 0, "Fraction of the daily budget that triggers a warning (default 0.8)")
 
 	topCmd.Flags().IntVar(&flagTopPort, "ui", 2222, "Dashboard port to read from")
 	topCmd.Flags().BoolVar(&flagTopOnce, "once", false, "Render a single frame and exit (for scripts/CI)")
@@ -214,6 +218,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 		Cascade:           flagCascade,
 		Redact:            flagRedact,
 		Inspect:           flagInspect,
+		AlertWebhook:      flagAlertWebhook,
+		AlertThreshold:    flagAlertThreshold,
 	}
 
 	proxySrv, err := proxy.New(cfg, db, broker)

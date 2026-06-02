@@ -33,6 +33,8 @@ type Routing struct {
 	Cascade           bool    `toml:"cascade,omitempty"`           // cheap-first cascade with verification
 	Redact            bool    `toml:"redact,omitempty"`            // privacy firewall: mask secrets/PII before forwarding
 	Inspect           bool    `toml:"inspect,omitempty"`           // capture full prompts/responses for the inspector + replay
+	AlertWebhook      string  `toml:"alert_webhook,omitempty"`     // Slack/Discord/generic webhook for budget alerts
+	AlertThreshold    float64 `toml:"alert_threshold,omitempty"`   // fraction of budget that triggers a warning (0 ⇒ 0.8)
 }
 
 // Provider is a single configured LLM provider.

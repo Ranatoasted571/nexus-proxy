@@ -164,7 +164,7 @@ func TestHandleMessages_BudgetForcesFree(t *testing.T) {
 	free := openAIServer(http.StatusOK, "free-reply")
 	defer free.Close()
 	h := buildTestHandler(t, []testProv{{"prem", "premium", prem.URL}, {"free", "free", free.URL}})
-	h.budget = newBudgetTracker(0.01, 1.0) // already 1.0 spent → over the 0.01 cap
+	h.budget = newBudgetTracker(0.01, 1.0, "", 0) // already 1.0 spent → over the 0.01 cap
 
 	// A complex prompt normally routes to premium first; over budget → free only.
 	rec := doMessages(h, `{"model":"claude-sonnet-4-6","max_tokens":50,"messages":[{"role":"user","content":"Design the complete system architecture for a scalable platform"}]}`)

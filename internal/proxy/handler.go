@@ -153,6 +153,14 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 	if s, err := db.GetStats("today"); err == nil {
 		spentToday = s.TotalCostUSD
 	}
+	alertWebhook := cfg.AlertWebhook
+	if alertWebhook == "" {
+		alertWebhook = appCfg.Routing.AlertWebhook
+	}
+	alertThreshold := cfg.AlertThreshold
+	if alertThreshold <= 0 {
+		alertThreshold = appCfg.Routing.AlertThreshold
+	}
 
 	h := &Handler{
 		httpClient: &http.Client{Timeout: 5 * time.Minute},
@@ -160,7 +168,7 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 		providers:  active,
 		db:         db,
 		broker:     broker,
-		budget:     newBudgetTracker(budgetLimit, spentToday),
+		budget:     newBudgetTracker(budgetLimit, spentToday, alertWebhook, alertThreshold),
 		stopHealth: make(chan struct{}),
 	}
 	if !cfg.DisableCache {
@@ -192,6 +200,9 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 		log.Info().Int("providers", len(active)).Str("strategy", appCfg.Routing.Strategy).Msg("Router configured")
 		if budgetLimit > 0 {
 			log.Info().Float64("daily_budget_usd", budgetLimit).Msg("Daily budget cap enabled — free/local only once exceeded")
+		}
+		if alertWebhook != "" {
+			log.Info().Msg("Budget alerts enabled — webhook fires at threshold and when exceeded")
 		}
 		if h.cascade {
 			log.Info().Msg("Cheap-first cascade enabled — try the cheapest capable model, verify, escalate on failure")
@@ -821,10 +832,23 @@ type budgetTracker struct {
 	limit float64
 	day   string
 	spent float64
+	// Alerts: when limit > 0 and a webhook is set, post once when crossing the
+	// warn threshold and once when exceeding the budget (per day).
+	webhook              string
+	threshold            float64
+	firedWarn, firedOver bool
+	client               *http.Client
 }
 
-func newBudgetTracker(limit, spentToday float64) *budgetTracker {
-	return &budgetTracker{limit: limit, day: todayKey(), spent: spentToday}
+func newBudgetTracker(limit, spentToday float64, webhook string, threshold float64) *budgetTracker {
+	if threshold <= 0 || threshold >= 1 {
+		threshold = 0.8
+	}
+	return &budgetTracker{
+		limit: limit, day: todayKey(), spent: spentToday,
+		webhook: webhook, threshold: threshold,
+		client: &http.Client{Timeout: 10 * time.Second},
+	}
 }
 
 func todayKey() string { return time.Now().Format("2006-01-02") }
@@ -834,6 +858,7 @@ func (b *budgetTracker) roll() {
 	if d := todayKey(); d != b.day {
 		b.day = d
 		b.spent = 0
+		b.firedWarn, b.firedOver = false, false
 	}
 }
 
@@ -842,9 +867,40 @@ func (b *budgetTracker) Add(cost float64) {
 		return
 	}
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	b.roll()
 	b.spent += cost
+	var alert string
+	if b.limit > 0 && b.webhook != "" {
+		switch {
+		case !b.firedOver && b.spent >= b.limit:
+			b.firedOver = true
+			alert = fmt.Sprintf("🔴 NEXUS: daily budget exceeded — $%.2f of $%.2f. Free/local models only for the rest of today.", b.spent, b.limit)
+		case !b.firedWarn && b.spent >= b.limit*b.threshold:
+			b.firedWarn = true
+			alert = fmt.Sprintf("🟠 NEXUS: %.0f%% of your daily budget used — $%.2f of $%.2f.", b.threshold*100, b.spent, b.limit)
+		}
+	}
+	b.mu.Unlock()
+	if alert != "" {
+		go b.postAlert(alert)
+	}
+}
+
+// postAlert sends a one-line message to the configured webhook. The payload sets
+// both "text" (Slack) and "content" (Discord) so a single URL works for either.
+func (b *budgetTracker) postAlert(msg string) {
+	payload, _ := json.Marshal(map[string]string{"text": msg, "content": msg})
+	req, err := http.NewRequest("POST", b.webhook, bytes.NewReader(payload))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := b.client.Do(req)
+	if err != nil {
+		log.Warn().Err(err).Msg("Budget alert webhook failed")
+		return
+	}
+	_ = resp.Body.Close()
 }
 
 func (b *budgetTracker) Over() bool {

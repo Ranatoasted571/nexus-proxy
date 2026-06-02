@@ -25,6 +25,8 @@ type Config struct {
 	Cascade        bool    // cheap-first cascade with verification
 	Redact         bool    // privacy firewall: mask secrets/PII before forwarding
 	Inspect        bool    // capture full prompts/responses for the inspector + replay
+	AlertWebhook   string  // Slack/Discord/generic webhook for budget alerts
+	AlertThreshold float64 // fraction of budget that triggers a warning (0 ⇒ 0.8)
 }
 
 // Server is the main proxy server

@@ -108,10 +108,10 @@ func TestParseAnthropicUsage(t *testing.T) {
 }
 
 func TestBudgetTracker(t *testing.T) {
-	if newBudgetTracker(0, 0).Over() {
+	if newBudgetTracker(0, 0, "", 0).Over() {
 		t.Error("zero limit means unlimited — never over budget")
 	}
-	b := newBudgetTracker(1.0, 0)
+	b := newBudgetTracker(1.0, 0, "", 0)
 	if b.Over() {
 		t.Error("0 spend should not be over")
 	}

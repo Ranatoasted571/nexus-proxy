@@ -285,6 +285,13 @@ nexus start --budget 5        # or set routing.daily_budget_usd in config.toml
 Once today's spend hits the cap, NEXUS routes only to **free/local** providers
 for the rest of the day — premium models resume tomorrow.
 
+**Budget alerts** — point NEXUS at a Slack/Discord/generic webhook and it pings
+you when you cross a threshold and when you exceed the budget:
+
+```bash
+nexus start --budget 5 --alert-webhook https://hooks.slack.com/services/...   # --alert-threshold 0.8
+```
+
 ---
 
 ## Squeeze costs even further
