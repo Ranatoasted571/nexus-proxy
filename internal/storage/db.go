@@ -110,6 +110,8 @@ func (db *DB) migrate() error {
 		`ALTER TABLE requests ADD COLUMN cache_read_tokens INTEGER DEFAULT 0`,
 		`ALTER TABLE requests ADD COLUMN cache_write_tokens INTEGER DEFAULT 0`,
 		`ALTER TABLE requests ADD COLUMN cache_saved_usd REAL DEFAULT 0`,
+		`ALTER TABLE requests ADD COLUMN prompt TEXT`,   // captured only when --inspect is on
+		`ALTER TABLE requests ADD COLUMN response TEXT`, // captured only when --inspect is on
 	} {
 		_, _ = db.conn.Exec(stmt)
 	}

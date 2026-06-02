@@ -204,7 +204,7 @@ func (h *Handler) relayOpenAIPassthrough(w http.ResponseWriter, active *activePr
 	_, _ = w.Write(respBody)
 
 	u := openAIUsageFull(respBody)
-	h.logResult(active, areq, complexity, u, resp.StatusCode, time.Since(startTime), false)
+	h.logResult(active, areq, complexity, u, respBody, resp.StatusCode, time.Since(startTime), false)
 	log.Info().Str("provider", active.impl.Name()).Int("status", resp.StatusCode).
 		Int("in", u.In).Int("out", u.Out).Int("cache_read", u.CacheRead).Str("complexity", complexity.String()).Msg("Request completed (gateway)")
 }
@@ -242,7 +242,7 @@ func (h *Handler) relayOpenAIPassthroughStream(w http.ResponseWriter, active *ac
 		}
 	}
 	u := openAIUsageFull(captured.Bytes())
-	h.logResult(active, areq, complexity, u, resp.StatusCode, time.Since(startTime), true)
+	h.logResult(active, areq, complexity, u, captured.Bytes(), resp.StatusCode, time.Since(startTime), true)
 	log.Info().Str("provider", active.impl.Name()).Int("in", u.In).Int("out", u.Out).Int("cache_read", u.CacheRead).Bool("stream", true).Msg("Stream completed (gateway)")
 }
 
@@ -255,7 +255,7 @@ func (h *Handler) relayAnthropicToOpenAI(w http.ResponseWriter, active *activePr
 		w.Header().Set("X-Nexus-Provider", active.impl.Name())
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(respBody)
-		h.logResult(active, areq, complexity, tokenUsage{}, resp.StatusCode, time.Since(startTime), oreq.Stream)
+		h.logResult(active, areq, complexity, tokenUsage{}, respBody, resp.StatusCode, time.Since(startTime), oreq.Stream)
 		return
 	}
 	var ar AnthropicResponse
@@ -276,7 +276,7 @@ func (h *Handler) relayAnthropicToOpenAI(w http.ResponseWriter, active *activePr
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(oaiResp)
 	}
-	h.logResult(active, areq, complexity, u, http.StatusOK, time.Since(startTime), oreq.Stream)
+	h.logResult(active, areq, complexity, u, respBody, http.StatusOK, time.Since(startTime), oreq.Stream)
 	log.Info().Str("provider", active.impl.Name()).Int("in", u.In).Int("out", u.Out).Bool("stream", oreq.Stream).Msg("Request completed (gateway→anthropic)")
 }
 

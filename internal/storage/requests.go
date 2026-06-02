@@ -26,6 +26,8 @@ type Request struct {
 	Status           int
 	Error            string
 	Stream           bool
+	Prompt           string // full request JSON — only stored when --inspect is on
+	Response         string // full response body — only stored when --inspect is on
 }
 
 // LogRequest saves a request to the database and returns the new row ID.
@@ -35,8 +37,9 @@ func (db *DB) LogRequest(req *Request) (int64, error) {
 			created_at, request_id, model_asked, model_used,
 			provider, complexity, input_tokens, output_tokens,
 			cache_read_tokens, cache_write_tokens,
-			cost_usd, cache_saved_usd, latency_ms, status, error, stream
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			cost_usd, cache_saved_usd, latency_ms, status, error, stream,
+			prompt, response
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		// Store as SQLite-native UTC datetime text so date()/strftime() work.
 		req.CreatedAt.UTC().Format("2006-01-02 15:04:05"),
 		req.RequestID,
@@ -54,6 +57,8 @@ func (db *DB) LogRequest(req *Request) (int64, error) {
 		req.Status,
 		req.Error,
 		req.Stream,
+		req.Prompt,
+		req.Response,
 	)
 	if err != nil {
 		return 0, err
@@ -77,6 +82,28 @@ func (db *DB) GetRecentRequests(limit int) ([]*Request, error) {
 	defer rows.Close()
 
 	return scanRequests(rows)
+}
+
+// GetRequestDetail returns a single request including the captured prompt and
+// response (populated only when --inspect was on at the time).
+func (db *DB) GetRequestDetail(id int64) (*Request, error) {
+	r := &Request{}
+	var created string
+	err := db.conn.QueryRow(`
+		SELECT id, created_at, model_asked, model_used, provider, complexity,
+			   input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+			   cost_usd, cache_saved_usd, latency_ms, status, stream,
+			   COALESCE(prompt,''), COALESCE(response,'')
+		FROM requests WHERE id = ?`, id).Scan(
+		&r.ID, &created, &r.ModelAsked, &r.ModelUsed, &r.Provider, &r.Complexity,
+		&r.InputTokens, &r.OutputTokens, &r.CacheReadTokens, &r.CacheWriteTokens,
+		&r.CostUSD, &r.CacheSavedUSD, &r.LatencyMS, &r.Status, &r.Stream,
+		&r.Prompt, &r.Response,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 // GetStats returns aggregated statistics

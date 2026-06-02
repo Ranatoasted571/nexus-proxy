@@ -24,6 +24,7 @@ type Config struct {
 	SemanticThreshold float64 // cosine threshold for semantic cache (0 ⇒ 0.95)
 	Cascade        bool    // cheap-first cascade with verification
 	Redact         bool    // privacy firewall: mask secrets/PII before forwarding
+	Inspect        bool    // capture full prompts/responses for the inspector + replay
 }
 
 // Server is the main proxy server

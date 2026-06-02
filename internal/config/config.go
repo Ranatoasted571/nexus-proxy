@@ -32,6 +32,7 @@ type Routing struct {
 	SemanticThreshold float64 `toml:"semantic_threshold,omitempty"` // cosine threshold (0 ⇒ 0.95)
 	Cascade           bool    `toml:"cascade,omitempty"`           // cheap-first cascade with verification
 	Redact            bool    `toml:"redact,omitempty"`            // privacy firewall: mask secrets/PII before forwarding
+	Inspect           bool    `toml:"inspect,omitempty"`           // capture full prompts/responses for the inspector + replay
 }
 
 // Provider is a single configured LLM provider.

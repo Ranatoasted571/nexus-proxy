@@ -81,7 +81,17 @@ type Handler struct {
 	cache      *responseCache // may be nil (disabled)
 	cascade    bool           // cheap-first cascade with verification
 	firewall   *redactor      // privacy firewall (nil = off)
+	inspect    bool           // capture full prompt/response for the inspector
 	stopHealth chan struct{}
+}
+
+// capText caps a captured prompt/response so the inspector can't bloat the DB.
+func capText(s string) string {
+	const max = 64 * 1024
+	if len(s) > max {
+		return s[:max] + "…[truncated]"
+	}
+	return s
 }
 
 // NewHandler builds the provider set + router from config and wires in the
@@ -170,6 +180,10 @@ func NewHandler(cfg *Config, db *storage.DB, broker EventPublisher) (*Handler, e
 	if cfg.Redact || appCfg.Routing.Redact {
 		h.firewall = &redactor{}
 		log.Info().Msg("Privacy firewall enabled — secrets/PII are masked before leaving for any provider")
+	}
+	h.inspect = cfg.Inspect || appCfg.Routing.Inspect
+	if h.inspect {
+		log.Info().Msg("Request inspector enabled — full prompts/responses are stored locally for replay")
 	}
 
 	if len(active) == 0 {
@@ -322,10 +336,20 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Explicit provider pin (dashboard replay/compare, or "force provider X").
+	forced := r.Header.Get("X-Nexus-Provider")
+	if forced != "" {
+		if _, ok := h.providers[forced]; !ok {
+			h.writeError(w, http.StatusBadRequest, "X-Nexus-Provider: unknown provider "+forced)
+			return
+		}
+		chain = []*router.Provider{{Name: forced}}
+	}
+
 	// Cheap-first cascade: try the cheapest capable provider, verify its output,
 	// and escalate to a stronger model only on failure. Falls through to the
 	// normal failover path if every cascade candidate is unreachable.
-	if h.cascade {
+	if h.cascade && forced == "" {
 		cc := h.router.CascadeChain(complexity)
 		if h.budget.Over() {
 			if cheap := freeLocalOnly(cc); len(cheap) > 0 {
@@ -339,7 +363,7 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 
 	// Daily budget cap: once today's spend exceeds the limit, restrict to
 	// free/local providers (paid tiers are skipped until the next day).
-	if h.budget.Over() {
+	if forced == "" && h.budget.Over() {
 		if cheap := freeLocalOnly(chain); len(cheap) > 0 {
 			chain = cheap
 		} else {
@@ -527,7 +551,7 @@ func (h *Handler) relayAnthropicSync(w http.ResponseWriter, active *activeProvid
 	}
 
 	u := anthropicUsageFull(respBody)
-	h.logResult(active, req, complexity, u, resp.StatusCode, time.Since(startTime), false)
+	h.logResult(active, req, complexity, u, respBody, resp.StatusCode, time.Since(startTime), false)
 	log.Info().
 		Str("provider", active.impl.Name()).
 		Int("status", resp.StatusCode).
@@ -553,7 +577,7 @@ func (h *Handler) relayAnthropicBuffered(w http.ResponseWriter, active *activePr
 		w.Header().Set("X-Nexus-Provider", active.impl.Name())
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(respBody)
-		h.logResult(active, req, complexity, tokenUsage{}, resp.StatusCode, time.Since(startTime), req.Stream)
+		h.logResult(active, req, complexity, tokenUsage{}, respBody, resp.StatusCode, time.Since(startTime), req.Stream)
 		log.Warn().Str("provider", active.impl.Name()).Int("status", resp.StatusCode).Msg("Provider returned error")
 		return
 	}
@@ -580,7 +604,7 @@ func (h *Handler) relayAnthropicBuffered(w http.ResponseWriter, active *activePr
 		_, _ = w.Write(respBody)
 	}
 
-	h.logResult(active, req, complexity, u, http.StatusOK, time.Since(startTime), req.Stream)
+	h.logResult(active, req, complexity, u, respBody, http.StatusOK, time.Since(startTime), req.Stream)
 	log.Info().
 		Str("provider", active.impl.Name()).
 		Int("in", u.In).Int("out", u.Out).
@@ -606,7 +630,8 @@ func resolveAnthropicKeyFor(configured string, origHeaders http.Header) string {
 }
 
 // logResult records a completed request to storage and pushes live events.
-func (h *Handler) logResult(active *activeProvider, req AnthropicRequest, complexity router.Complexity, u tokenUsage, status int, latency time.Duration, stream bool) {
+// respBody is the upstream response (used only for --inspect capture; may be nil).
+func (h *Handler) logResult(active *activeProvider, req AnthropicRequest, complexity router.Complexity, u tokenUsage, respBody []byte, status int, latency time.Duration, stream bool) {
 	now := time.Now()
 	pricing := active.impl.Pricing()
 	cost := pricing.CalculateCostFull(u.In, u.Out, u.CacheRead, u.CacheWrite)
@@ -627,6 +652,12 @@ func (h *Handler) logResult(active *activeProvider, req AnthropicRequest, comple
 		LatencyMS:        latency.Milliseconds(),
 		Status:           status,
 		Stream:           stream,
+	}
+	if h.inspect { // opt-in: capture full prompt + response for the inspector
+		if pj, err := json.Marshal(req); err == nil {
+			rec.Prompt = capText(string(pj))
+		}
+		rec.Response = capText(string(respBody))
 	}
 
 	var id int64

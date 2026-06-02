@@ -73,7 +73,7 @@ func (h *Handler) relayAnthropicStream(w http.ResponseWriter, r *http.Request, a
 	}
 
 	u := streamUsageFull(captured.Bytes())
-	h.logResult(active, req, complexity, u, resp.StatusCode, time.Since(startTime), true)
+	h.logResult(active, req, complexity, u, captured.Bytes(), resp.StatusCode, time.Since(startTime), true)
 	log.Info().
 		Str("provider", active.impl.Name()).
 		Int("status", resp.StatusCode).

@@ -12,6 +12,38 @@
 
   const PALETTE = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899', '#84cc16', '#a855f7', '#14b8a6']
 
+  // ── Request inspector + replay ──
+  let inspecting: any = null
+  let inspectLoading = false
+  let replayProvider = ''
+  let replayResult: any = null
+  let replayLoading = false
+
+  function pretty(s: string): string {
+    try { return JSON.stringify(JSON.parse(s), null, 2) } catch { return s }
+  }
+  async function openInspector(id: number) {
+    inspecting = null; replayResult = null; inspectLoading = true
+    try {
+      const r = await fetch(`/api/requests/${id}`)
+      inspecting = await r.json()
+    } catch { inspecting = { error: 'failed to load' } }
+    inspectLoading = false
+  }
+  function closeInspector() { inspecting = null; replayResult = null }
+  async function runReplay() {
+    if (!inspecting?.id) return
+    replayLoading = true; replayResult = null
+    try {
+      const r = await fetch('/api/replay', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: inspecting.id, provider: replayProvider }),
+      })
+      replayResult = await r.json()
+    } catch (e) { replayResult = { error: String(e) } }
+    replayLoading = false
+  }
+
   let costCanvas: HTMLCanvasElement
   let provCanvas: HTMLCanvasElement
   let costChart: Chart | undefined
@@ -131,7 +163,8 @@
       <div class="empty">Waiting for requests… point Claude Code at this proxy.</div>
     {/if}
     {#each $recentRequests as req (req.id)}
-      <div class="row">
+      <div class="row clickable" role="button" tabindex="0" title="Inspect / replay"
+           on:click={() => openInspector(req.id)} on:keydown={(e) => e.key === 'Enter' && openInspector(req.id)}>
         <span class="provider">{req.provider}</span>
         <span class="model">{req.model_asked}</span>
         <span class="cx {req.complexity}">{req.complexity}</span>
@@ -143,6 +176,57 @@
     {/each}
   </div>
 </main>
+
+{#if inspecting}
+  <div class="modal-bg" role="presentation" on:click={closeInspector}>
+    <div class="modal" role="dialog" aria-modal="true" on:click|stopPropagation on:keydown|stopPropagation>
+      <div class="modal-head">
+        <div>
+          <b>Request #{inspecting.id}</b>
+          <span class="muted">· {inspecting.provider} · {inspecting.model_used} · ${(inspecting.cost_usd || 0).toFixed(5)} · {inspecting.latency_ms}ms</span>
+        </div>
+        <button class="x" on:click={closeInspector}>✕</button>
+      </div>
+
+      {#if !inspecting.inspected}
+        <div class="hint">No prompt/response captured. Start NEXUS with <code>--inspect</code> to enable the inspector + replay.</div>
+      {:else}
+        <div class="io-grid">
+          <div>
+            <div class="io-label">PROMPT</div>
+            <pre>{pretty(inspecting.prompt)}</pre>
+          </div>
+          <div>
+            <div class="io-label">RESPONSE</div>
+            <pre>{pretty(inspecting.response)}</pre>
+          </div>
+        </div>
+
+        <div class="replay">
+          <span class="io-label">REPLAY vs</span>
+          <select bind:value={replayProvider}>
+            <option value="">auto-route</option>
+            {#each $providers as p (p.name)}<option value={p.name}>{p.name}</option>{/each}
+          </select>
+          <button class="btn-replay" on:click={runReplay} disabled={replayLoading}>
+            {replayLoading ? 'Replaying…' : 'Replay'}
+          </button>
+          {#if replayResult}
+            {#if replayResult.error}
+              <span class="err">{replayResult.error}</span>
+            {:else}
+              <span class="muted">→ {replayResult.provider} · {replayResult.model} · {(replayResult.input_tokens || 0) + (replayResult.output_tokens || 0)}t · {replayResult.latency_ms}ms</span>
+            {/if}
+          {/if}
+        </div>
+        {#if replayResult && !replayResult.error}
+          <div class="io-label">REPLAY OUTPUT</div>
+          <pre class="replay-out">{replayResult.output}</pre>
+        {/if}
+      {/if}
+    </div>
+  </div>
+{/if}
 
 <style>
   :global(*, *::before, *::after) { box-sizing: border-box; margin: 0; padding: 0; }
@@ -183,6 +267,24 @@
   .num { font-size: 26px; font-weight: 700; font-family: 'Geist Mono', monospace; }
   .num.accent { color: #7c3aed; } .num.green { color: #10b981; } .num.cyan { color: #06b6d4; }
   .cache-note { color: #06b6d4; font-size: 13px; }
+
+  .clickable { cursor: pointer; }
+  .clickable:hover { background: #11182f; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 50; }
+  .modal { background: #0a0e1a; border: 1px solid #1a2035; border-radius: 12px; width: 100%; max-width: 920px; max-height: 86vh; overflow: auto; padding: 18px 20px; }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .modal-head .muted { color: #64748b; font-size: 12px; }
+  .x { background: #1a2035; border: 0; color: #e2e8f0; border-radius: 6px; width: 28px; height: 28px; cursor: pointer; }
+  .io-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .io-label { font-size: 10px; color: #64748b; letter-spacing: 0.14em; margin: 8px 0 4px; }
+  .modal pre { background: #050816; border: 1px solid #1a2035; border-radius: 8px; padding: 10px; font-family: 'Geist Mono','SF Mono',ui-monospace,monospace; font-size: 11px; color: #94a3b8; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto; }
+  .replay { display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .replay select { background: #0a0e1a; color: #e2e8f0; border: 1px solid #1a2035; border-radius: 6px; padding: 6px 8px; }
+  .btn-replay { background: #7c3aed; color: #fff; border: 0; border-radius: 6px; padding: 6px 14px; font-weight: 700; cursor: pointer; }
+  .btn-replay:disabled { opacity: 0.5; cursor: default; }
+  .replay-out { margin-top: 4px; }
+  .hint { color: #94a3b8; background: #11182f; border: 1px solid #1a2035; border-radius: 8px; padding: 12px; }
+  .hint code { color: #06b6d4; }
   .label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.12em; }
 
   .providers { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }

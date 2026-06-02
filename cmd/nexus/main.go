@@ -140,6 +140,7 @@ var (
 	flagRedact            bool
 	flagTopPort           int
 	flagTopOnce           bool
+	flagInspect           bool
 )
 
 func init() {
@@ -154,6 +155,7 @@ func init() {
 	startCmd.Flags().Float64Var(&flagSemanticThreshold, "semantic-threshold", 0, "Cosine threshold for the semantic cache (default 0.95)")
 	startCmd.Flags().BoolVar(&flagCascade, "cascade", false, "Cheap-first cascade: try the cheapest capable model, verify, escalate on failure")
 	startCmd.Flags().BoolVar(&flagRedact, "redact", false, "Privacy firewall: mask secrets/API keys/PII before forwarding to any provider")
+	startCmd.Flags().BoolVar(&flagInspect, "inspect", false, "Store full prompts/responses locally so the dashboard can inspect + replay them")
 
 	topCmd.Flags().IntVar(&flagTopPort, "ui", 2222, "Dashboard port to read from")
 	topCmd.Flags().BoolVar(&flagTopOnce, "once", false, "Render a single frame and exit (for scripts/CI)")
@@ -210,6 +212,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		SemanticThreshold: flagSemanticThreshold,
 		Cascade:           flagCascade,
 		Redact:            flagRedact,
+		Inspect:           flagInspect,
 	}
 
 	proxySrv, err := proxy.New(cfg, db, broker)
@@ -224,7 +227,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	// Dashboard server (optional). Shares the broker + DB with the proxy.
 	var dash *dashboard.Server
 	if !flagNoUI {
-		dash = dashboard.NewServer(flagDashboardPort, broker, db)
+		dash = dashboard.NewServer(flagDashboardPort, flagProxyPort, broker, db)
 		go func() {
 			if err := dash.Start(); err != nil && err != http.ErrServerClosed {
 				log.Error().Err(err).Msg("Dashboard server error")

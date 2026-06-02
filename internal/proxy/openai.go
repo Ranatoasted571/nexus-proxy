@@ -32,7 +32,7 @@ func (h *Handler) relayOpenAI(w http.ResponseWriter, active *activeProvider, req
 		w.Header().Set("X-Nexus-Provider", active.impl.Name())
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(respBody)
-		h.logResult(active, req, complexity, tokenUsage{}, resp.StatusCode, time.Since(startTime), req.Stream)
+		h.logResult(active, req, complexity, tokenUsage{}, respBody, resp.StatusCode, time.Since(startTime), req.Stream)
 		log.Warn().Str("provider", active.impl.Name()).Int("status", resp.StatusCode).Msg("Provider returned error")
 		return
 	}
@@ -56,7 +56,7 @@ func (h *Handler) relayOpenAI(w http.ResponseWriter, active *activeProvider, req
 		_ = json.NewEncoder(w).Encode(anthResp)
 	}
 
-	h.logResult(active, req, complexity, u, http.StatusOK, time.Since(startTime), req.Stream)
+	h.logResult(active, req, complexity, u, respBody, http.StatusOK, time.Since(startTime), req.Stream)
 	log.Info().
 		Str("provider", active.impl.Name()).
 		Str("model_used", active.impl.MapModel(req.Model)).
@@ -190,7 +190,7 @@ func (h *Handler) relayOpenAIStream(w http.ResponseWriter, active *activeProvide
 		w.Header().Set("X-Nexus-Provider", active.impl.Name())
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(body)
-		h.logResult(active, req, complexity, tokenUsage{}, resp.StatusCode, time.Since(startTime), true)
+		h.logResult(active, req, complexity, tokenUsage{}, body, resp.StatusCode, time.Since(startTime), true)
 		return
 	}
 
@@ -300,7 +300,7 @@ func (h *Handler) relayOpenAIStream(w http.ResponseWriter, active *activeProvide
 		cachedTok = inTok
 	}
 	u := tokenUsage{In: inTok - cachedTok, Out: outTok, CacheRead: cachedTok}
-	h.logResult(active, req, complexity, u, http.StatusOK, time.Since(startTime), true)
+	h.logResult(active, req, complexity, u, nil, http.StatusOK, time.Since(startTime), true)
 	log.Info().
 		Str("provider", active.impl.Name()).
 		Int("in", u.In).Int("out", u.Out).Int("cache_read", u.CacheRead).

@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -15,18 +18,21 @@ import (
 
 // Server serves the dashboard UI and API.
 type Server struct {
-	port   int
-	broker *SSEBroker
-	db     *storage.DB
-	srv    *http.Server
+	port      int
+	proxyPort int // used to replay requests through the proxy
+	broker    *SSEBroker
+	db        *storage.DB
+	srv       *http.Server
 }
 
-// NewServer creates a new dashboard server.
-func NewServer(port int, broker *SSEBroker, db *storage.DB) *Server {
+// NewServer creates a new dashboard server. proxyPort is the proxy's port, used
+// by the replay endpoint.
+func NewServer(port, proxyPort int, broker *SSEBroker, db *storage.DB) *Server {
 	return &Server{
-		port:   port,
-		broker: broker,
-		db:     db,
+		port:      port,
+		proxyPort: proxyPort,
+		broker:    broker,
+		db:        db,
 	}
 }
 
@@ -52,6 +58,8 @@ func (s *Server) Routes() http.Handler {
 	api := r.PathPrefix("/api").Subrouter()
 	api.HandleFunc("/stats", s.handleStats).Methods("GET")
 	api.HandleFunc("/requests", s.handleRequests).Methods("GET")
+	api.HandleFunc("/requests/{id:[0-9]+}", s.handleRequestDetail).Methods("GET")
+	api.HandleFunc("/replay", s.handleReplay).Methods("POST")
 	api.HandleFunc("/providers", s.handleProviders).Methods("GET")
 	api.HandleFunc("/timeseries", s.handleTimeseries).Methods("GET")
 	api.HandleFunc("/breakdown", s.handleBreakdown).Methods("GET")
@@ -142,6 +150,106 @@ func (s *Server) handleProviders(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, map[string]interface{}{"providers": provs})
+}
+
+// handleRequestDetail returns a single request including the captured prompt and
+// response (present only if NEXUS ran with --inspect).
+func (s *Server) handleRequestDetail(w http.ResponseWriter, r *http.Request) {
+	if s.db == nil {
+		writeJSONStatus(w, http.StatusServiceUnavailable, map[string]interface{}{"error": "no database"})
+		return
+	}
+	id, _ := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	req, err := s.db.GetRequestDetail(id)
+	if err != nil {
+		writeJSONStatus(w, http.StatusNotFound, map[string]interface{}{"error": "request not found"})
+		return
+	}
+	writeJSON(w, map[string]interface{}{
+		"id": req.ID, "provider": req.Provider, "model_asked": req.ModelAsked,
+		"model_used": req.ModelUsed, "complexity": req.Complexity,
+		"input_tokens": req.InputTokens, "output_tokens": req.OutputTokens,
+		"cost_usd": req.CostUSD, "latency_ms": req.LatencyMS, "status": req.Status,
+		"prompt": req.Prompt, "response": req.Response,
+		"inspected": req.Prompt != "",
+	})
+}
+
+// handleReplay re-runs a captured request against a chosen provider (pinned via
+// the X-Nexus-Provider header) so the dashboard can compare cost/output.
+func (s *Server) handleReplay(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID       int64  `json:"id"`
+		Provider string `json:"provider"`
+	}
+	if json.NewDecoder(r.Body).Decode(&body) != nil {
+		writeJSONStatus(w, http.StatusBadRequest, map[string]interface{}{"error": "bad request"})
+		return
+	}
+	if s.db == nil {
+		writeJSONStatus(w, http.StatusServiceUnavailable, map[string]interface{}{"error": "no database"})
+		return
+	}
+	det, err := s.db.GetRequestDetail(body.ID)
+	if err != nil || det.Prompt == "" {
+		writeJSONStatus(w, http.StatusNotFound, map[string]interface{}{"error": "no captured prompt — start NEXUS with --inspect"})
+		return
+	}
+
+	// Force non-streaming so we can parse the response cleanly.
+	prompt := det.Prompt
+	var pm map[string]interface{}
+	if json.Unmarshal([]byte(prompt), &pm) == nil {
+		pm["stream"] = false
+		if b, e := json.Marshal(pm); e == nil {
+			prompt = string(b)
+		}
+	}
+
+	url := fmt.Sprintf("http://localhost:%d/v1/messages", s.proxyPort)
+	hreq, _ := http.NewRequest("POST", url, strings.NewReader(prompt))
+	hreq.Header.Set("Content-Type", "application/json")
+	hreq.Header.Set("x-api-key", "nexus-local")
+	if body.Provider != "" {
+		hreq.Header.Set("X-Nexus-Provider", body.Provider)
+	}
+	start := time.Now()
+	resp, err := (&http.Client{Timeout: 2 * time.Minute}).Do(hreq)
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadGateway, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	latency := time.Since(start).Milliseconds()
+
+	var ar struct {
+		Model   string `json:"model"`
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+		Usage struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+		} `json:"usage"`
+	}
+	_ = json.Unmarshal(raw, &ar)
+	var out strings.Builder
+	for _, c := range ar.Content {
+		if c.Type == "text" {
+			out.WriteString(c.Text)
+		}
+	}
+	writeJSON(w, map[string]interface{}{
+		"provider":      resp.Header.Get("X-Nexus-Provider"),
+		"model":         ar.Model,
+		"latency_ms":    latency,
+		"input_tokens":  ar.Usage.InputTokens,
+		"output_tokens": ar.Usage.OutputTokens,
+		"output":        out.String(),
+		"status":        resp.StatusCode,
+	})
 }
 
 func (s *Server) handleTimeseries(w http.ResponseWriter, r *http.Request) {
@@ -260,6 +368,12 @@ func emptyStats(period string) map[string]interface{} {
 
 func writeJSON(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+func writeJSONStatus(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 }
 

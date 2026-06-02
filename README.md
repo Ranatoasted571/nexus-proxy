@@ -67,6 +67,12 @@ cache-discounted spend (and a live "cache saved $X").
 **Free-tier key pools** — round-robin across multiple free keys with automatic
 429 cooldown, so free tiers behave like one big quota.
 
+**Privacy firewall** — optionally mask secrets, API keys and PII *before* a request
+ever leaves for a third-party model, restored transparently in the response.
+
+**Inspect & replay** — click any request in the dashboard to see the full prompt and
+response, then replay it against a different provider to compare cost and output.
+
 **Shareable savings** — a live "you saved $X vs. Claude" card you can post anywhere.
 
 ---
@@ -152,6 +158,8 @@ nexus start --strategy manual    # explicit model mapping
 nexus start --budget 5           # cap spend at $5/day → free/local only when exceeded
 nexus start --cascade            # cheap-first: try cheapest, verify, escalate only on failure
 nexus start --semantic-cache     # serve near-identical tool-less requests from cache
+nexus start --redact             # privacy firewall: mask secrets/PII before forwarding
+nexus start --inspect            # capture prompts/responses for the dashboard inspector + replay
 ```
 
 **Auto mode** classifies each request:
@@ -180,7 +188,9 @@ Open `http://localhost:2222` after starting NEXUS.
 
 ```bash
 nexus start              # start proxy + dashboard
-nexus add <provider> <key>  # add a provider
+nexus add <provider> <key>  # add a provider (key can be "k1,k2,k3" for a pool)
+nexus doctor             # diagnose setup, test every provider, suggest fixes
+nexus top                # live terminal dashboard (htop for your LLM traffic)
 nexus status             # provider health check
 nexus models             # show Claude→provider model mapping
 nexus logs               # recent requests
@@ -329,6 +339,53 @@ api_keys = ["env:GROQ_KEY_1", "env:GROQ_KEY_2"]
 Free tiers are rate-limited, not metered. NEXUS round-robins across a pool of
 keys and puts any key that returns `429` on a short cooldown — so several free
 keys behave like **one larger free quota**, and a lot more traffic stays at $0.
+
+---
+
+## Power tools
+
+### 🔒 Privacy firewall
+
+```bash
+nexus start --redact     # or routing.redact = true
+```
+
+Detects API keys (`sk-`, `sk-ant-`, `gsk_`, `AIza`, AWS `AKIA…`, GitHub `ghp_`…),
+JWTs, private-key blocks, `KEY=secret` assignments and emails in your prompt and
+replaces them with reversible placeholders, so **secrets never reach a third-party
+LLM**. The originals are restored in the response (even across streaming chunks),
+so masking is invisible to you and to Claude Code's file edits.
+
+### 🔍 Inspect & replay
+
+```bash
+nexus start --inspect    # or routing.inspect = true  (stored locally only)
+```
+
+Captures the full prompt + response for each request. In the dashboard, click any
+row to inspect it, then **replay it against any provider** to compare cost and
+output side-by-side. You can also pin any single request to a provider with the
+`X-Nexus-Provider` request header.
+
+### 🩺 nexus doctor
+
+```bash
+nexus doctor
+```
+
+Loads your config, **auto-discovers provider keys from your environment**
+(`GROQ_API_KEY`, `OPENAI_API_KEY`, …), health-checks every provider with latency,
+and reports actionable checks. NEXUS also picks those env keys up automatically at
+`nexus start`, so if you already have keys exported, it just works — zero config.
+
+### 📺 nexus top
+
+```bash
+nexus top                # reads the dashboard API; --once for a single frame
+```
+
+A live, dependency-free terminal dashboard — requests, cost, cache savings,
+providers and a color-coded request feed — for when you don't want a browser.
 
 ---
 
