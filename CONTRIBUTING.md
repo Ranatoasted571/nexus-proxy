@@ -8,7 +8,7 @@ Requirements: **Go 1.22+** and **Node 20+** (only needed to rebuild the dashboar
 
 ```bash
 git clone https://github.com/lynuxis2026-pixel/nexus-proxy.git
-cd nexus
+cd nexus-proxy
 make setup        # installs web deps + Go tooling
 
 # Run everything in dev mode (Go proxy + Vite dev server)

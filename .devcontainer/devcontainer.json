@@ -1,0 +1,18 @@
+{
+  "name": "NEXUS",
+  "image": "mcr.microsoft.com/devcontainers/go:1-1.22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" }
+  },
+  "forwardPorts": [3000, 2222],
+  "portsAttributes": {
+    "3000": { "label": "NEXUS proxy" },
+    "2222": { "label": "NEXUS dashboard" }
+  },
+  "postCreateCommand": "go mod download && npm --prefix web ci && (npm i -g @anthropic-ai/claude-code || true)",
+  "customizations": {
+    "vscode": {
+      "extensions": ["golang.go", "svelte.svelte-vscode"]
+    }
+  }
+}

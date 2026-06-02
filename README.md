@@ -326,6 +326,15 @@ tier = "free"
 
 ---
 
+## Develop from anywhere — even your phone 📱
+
+This repo ships a `.devcontainer/`, so you can build NEXUS in a **GitHub Codespace**
+straight from your phone (Go, Node and Claude Code come preinstalled). Open the repo
+on github.com → `Code → Codespaces → Create`, then run `claude` in the terminal and
+keep building. Full guide: **[docs/MOBILE.md](docs/MOBILE.md)**.
+
+---
+
 ## Contributing
 
 PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
