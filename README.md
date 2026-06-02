@@ -249,6 +249,11 @@ Bedrock and Vertex speak Claude's native Messages API; Azure uses the OpenAI
 format. Streaming works for all providers — OpenAI-compatible ones are converted
 token-by-token, Bedrock/Vertex are buffered then re-streamed.
 
+All three accept an optional `--base-url` to route through a gateway, VPC
+endpoint, or local proxy. That's also how NEXUS integration-tests them offline —
+the full URL / auth (SigV4, bearer, api-key) / body-transform / response path is
+verified in CI against an in-process server, with no cloud account required.
+
 ---
 
 ## How it works

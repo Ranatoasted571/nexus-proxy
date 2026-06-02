@@ -3,6 +3,7 @@ package proxy
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,18 @@ import (
 	"github.com/lynuxis2026-pixel/nexus-proxy/internal/providers"
 	"github.com/lynuxis2026-pixel/nexus-proxy/internal/router"
 )
+
+// anthropicNativeHandler builds a Handler with a single Anthropic-native
+// provider (Bedrock/Vertex) pointed at an in-process test server.
+func anthropicNativeHandler(impl providers.Provider, apiKey string) *Handler {
+	rt := router.New(router.StrategyAuto)
+	rt.AddProvider(&router.Provider{Name: impl.Name(), Tier: "premium", Healthy: true})
+	return &Handler{
+		httpClient: &http.Client{Timeout: 10 * time.Second},
+		router:     rt,
+		providers:  map[string]*activeProvider{impl.Name(): {impl: impl, apiKey: apiKey}},
+	}
+}
 
 // ─── test helpers ───────────────────────────────────────────────────────────
 
@@ -207,5 +220,90 @@ func TestHandleMessages_ZeroConfigBadRequest(t *testing.T) {
 	rec := doMessages(h, `not json`)
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("invalid JSON should be 400, got %d", rec.Code)
+	}
+}
+
+// anthropicResponseJSON is a canned Anthropic Messages response body.
+func anthropicResponseJSON(text string) string {
+	return `{"id":"msg_1","type":"message","role":"assistant","model":"claude","content":[{"type":"text","text":"` +
+		text + `"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}}`
+}
+
+func TestHandleMessages_Bedrock(t *testing.T) {
+	t.Setenv("AWS_ACCESS_KEY_ID", "AKIDTEST")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "secretkey")
+	var gotPath, gotAuth, gotAmzDate, gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotAuth, gotAmzDate = r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("X-Amz-Date")
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(anthropicResponseJSON("bedrock-reply")))
+	}))
+	defer srv.Close()
+
+	impl, err := providers.New(providers.Spec{Type: "bedrock", Name: "bedrock", Region: "us-east-1", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := doMessages(anthropicNativeHandler(impl, ""), `{"model":"claude-haiku-4-5","max_tokens":50,"messages":[{"role":"user","content":"hi"}]}`)
+
+	if !strings.Contains(gotPath, "/invoke") {
+		t.Errorf("URL path = %q, want .../invoke", gotPath)
+	}
+	if !strings.HasPrefix(gotAuth, "AWS4-HMAC-SHA256 ") {
+		t.Errorf("missing SigV4 Authorization, got %q", gotAuth)
+	}
+	if gotAmzDate == "" {
+		t.Error("missing X-Amz-Date header")
+	}
+	if !strings.Contains(gotBody, "bedrock-2023-05-31") {
+		t.Errorf("body missing anthropic_version: %s", gotBody)
+	}
+	if strings.Contains(gotBody, `"model"`) {
+		t.Errorf("body should strip model field: %s", gotBody)
+	}
+	var resp AnthropicResponse
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if len(resp.Content) == 0 || resp.Content[0].Text != "bedrock-reply" {
+		t.Errorf("relayed content = %+v", resp.Content)
+	}
+}
+
+func TestHandleMessages_VertexStreaming(t *testing.T) {
+	var gotPath, gotAuth, gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotAuth = r.URL.Path, r.Header.Get("Authorization")
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(anthropicResponseJSON("vertex-reply")))
+	}))
+	defer srv.Close()
+
+	impl, err := providers.New(providers.Spec{Type: "vertex", Name: "vertex", Region: "us-east5", Project: "proj", BaseURL: srv.URL, APIKey: "gcp-token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// stream:true exercises the buffered → SSE synthesis path for Anthropic-native.
+	rec := doMessages(anthropicNativeHandler(impl, "gcp-token"), `{"model":"claude-sonnet-4-6","stream":true,"max_tokens":50,"messages":[{"role":"user","content":"hi"}]}`)
+
+	if gotAuth != "Bearer gcp-token" {
+		t.Errorf("Vertex auth = %q, want 'Bearer gcp-token'", gotAuth)
+	}
+	if !strings.Contains(gotPath, "rawPredict") {
+		t.Errorf("path = %q, want :rawPredict", gotPath)
+	}
+	if !strings.Contains(gotBody, "vertex-2023-10-16") {
+		t.Errorf("body missing anthropic_version: %s", gotBody)
+	}
+	if strings.Contains(gotBody, `"stream"`) {
+		t.Errorf("body should strip stream field: %s", gotBody)
+	}
+	out := rec.Body.String()
+	for _, want := range []string{"event: message_start", "text_delta", "vertex-reply", "event: message_stop"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("synthesized SSE missing %q\n--- got ---\n%s", want, out)
+		}
 	}
 }

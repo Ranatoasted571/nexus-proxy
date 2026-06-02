@@ -21,6 +21,17 @@
 
 ## Beslissingen Log
 
+### [2026-06] Bedrock/Vertex kosteloos testbaar (base_url override)
+- Probleem: Bedrock/Vertex hadden hun endpoint hardgecodeerd → niet te testen zonder
+  betaald cloud-account. Opgelost: optionele `base_url` override op beide (default blijft
+  de echte AWS/GCP-URL). Maakt routeren via gateway/VPC-endpoint mogelijk ÉN testen gratis.
+- Nieuwe integratietests (`handler_test.go`) tegen een in-proces server valideren de
+  VOLLEDIGE flow: Bedrock (SigV4 Authorization + X-Amz-Date + /invoke + body→bedrock-2023-05-31,
+  model gestript), Vertex (Bearer + :rawPredict + body→vertex-2023-10-16, stream gestript +
+  gesynthetiseerde SSE). Beide groen, $0 cloudkosten.
+- Caveat uit vorige entry is hiermee opgelost: hele request/auth/transform/response-pad is nu
+  getest. (Optioneel echte smoke-test: GCP $300 gratis trial voor Vertex; Bedrock ~centen.)
+
 ### [2026-06] Gepubliceerd op GitHub + release v0.1.0
 - Repo: github.com/lynuxis2026-pixel/nexus-proxy (PRIVATE, branch main), gepusht via gh.
 - Module-pad hernoemd `github.com/yourusername/nexus` → `github.com/lynuxis2026-pixel/nexus-proxy`

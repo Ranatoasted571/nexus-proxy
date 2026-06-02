@@ -83,27 +83,32 @@ func (a *Azure) Authorize(req *http.Request, _ []byte, apiKey string) {
 // ─── Google Vertex AI (Anthropic-native, bearer access token) ───────────────
 
 type Vertex struct {
-	name, region, project, tier string
-	modelMap                    map[string]string
-	pricing                     PricingInfo
+	name, region, project, tier, baseURL string
+	modelMap                             map[string]string
+	pricing                              PricingInfo
 }
 
 func newVertex(spec Spec) (*Vertex, error) {
 	if spec.Region == "" || spec.Project == "" {
 		return nil, fmt.Errorf("vertex provider %q: region and project are required", spec.Name)
 	}
+	base := strings.TrimRight(spec.BaseURL, "/")
+	if base == "" {
+		base = fmt.Sprintf("https://%s-aiplatform.googleapis.com", spec.Region)
+	}
 	return &Vertex{
 		name:     orDefault(spec.Name, "vertex"),
 		region:   spec.Region,
 		project:  spec.Project,
 		tier:     orDefault(spec.Tier, TierPremium),
+		baseURL:  base,
 		modelMap: spec.ModelMap,
 		pricing:  pricingOr(spec, 3.00, 15.00),
 	}, nil
 }
 
 func (v *Vertex) Name() string               { return v.name }
-func (v *Vertex) BaseURL() string            { return fmt.Sprintf("https://%s-aiplatform.googleapis.com", v.region) }
+func (v *Vertex) BaseURL() string            { return v.baseURL }
 func (v *Vertex) Tier() string               { return v.tier }
 func (v *Vertex) Pricing() PricingInfo       { return v.pricing }
 func (v *Vertex) ChatCompletionsURL() string { return "" } // Anthropic-native
@@ -124,8 +129,8 @@ func (v *Vertex) MapModel(claudeModel string) string {
 }
 
 func (v *Vertex) MessagesURL(claudeModel string) string {
-	return fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/anthropic/models/%s:rawPredict",
-		v.region, v.project, v.region, v.MapModel(claudeModel))
+	return v.baseURL + fmt.Sprintf("/v1/projects/%s/locations/%s/publishers/anthropic/models/%s:rawPredict",
+		v.project, v.region, v.MapModel(claudeModel))
 }
 
 func (v *Vertex) PrepareBody(body []byte, _ string) []byte {
@@ -139,26 +144,31 @@ func (v *Vertex) Authorize(req *http.Request, _ []byte, apiKey string) {
 // ─── AWS Bedrock (Anthropic-native, SigV4) ──────────────────────────────────
 
 type Bedrock struct {
-	name, region, tier string
-	modelMap           map[string]string
-	pricing            PricingInfo
+	name, region, tier, baseURL string
+	modelMap                    map[string]string
+	pricing                     PricingInfo
 }
 
 func newBedrock(spec Spec) (*Bedrock, error) {
 	if spec.Region == "" {
 		return nil, fmt.Errorf("bedrock provider %q: region is required", spec.Name)
 	}
+	base := strings.TrimRight(spec.BaseURL, "/")
+	if base == "" {
+		base = fmt.Sprintf("https://bedrock-runtime.%s.amazonaws.com", spec.Region)
+	}
 	return &Bedrock{
 		name:     orDefault(spec.Name, "bedrock"),
 		region:   spec.Region,
 		tier:     orDefault(spec.Tier, TierPremium),
+		baseURL:  base,
 		modelMap: spec.ModelMap,
 		pricing:  pricingOr(spec, 3.00, 15.00),
 	}, nil
 }
 
 func (b *Bedrock) Name() string               { return b.name }
-func (b *Bedrock) BaseURL() string            { return fmt.Sprintf("https://bedrock-runtime.%s.amazonaws.com", b.region) }
+func (b *Bedrock) BaseURL() string            { return b.baseURL }
 func (b *Bedrock) Tier() string               { return b.tier }
 func (b *Bedrock) Pricing() PricingInfo       { return b.pricing }
 func (b *Bedrock) ChatCompletionsURL() string { return "" } // Anthropic-native
@@ -180,7 +190,7 @@ func (b *Bedrock) MapModel(claudeModel string) string {
 
 func (b *Bedrock) MessagesURL(claudeModel string) string {
 	model := strings.ReplaceAll(b.MapModel(claudeModel), ":", "%3A")
-	return fmt.Sprintf("https://bedrock-runtime.%s.amazonaws.com/model/%s/invoke", b.region, model)
+	return b.baseURL + "/model/" + model + "/invoke"
 }
 
 func (b *Bedrock) PrepareBody(body []byte, _ string) []byte {
