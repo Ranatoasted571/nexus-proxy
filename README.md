@@ -7,7 +7,7 @@ NEXUS keeps your code and secrets **on your machine**, **learns** which model wi
 
 [![Release](https://img.shields.io/github/v/release/lynuxis2026-pixel/nexus-proxy?color=7c3aed)](https://github.com/lynuxis2026-pixel/nexus-proxy/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/lynuxis2026-pixel/nexus-proxy/ci.yml?branch=main&label=CI)](https://github.com/lynuxis2026-pixel/nexus-proxy/actions)
-[![License: MIT](https://img.shields.io/github/license/lynuxis2026-pixel/nexus-proxy?color=06b6d4)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-06b6d4)](LICENSE)
 [![Go](https://img.shields.io/github/go-mod/go-version/lynuxis2026-pixel/nexus-proxy)](go.mod)
 [![Stars](https://img.shields.io/github/stars/lynuxis2026-pixel/nexus-proxy?style=social)](https://github.com/lynuxis2026-pixel/nexus-proxy/stargazers)
 
@@ -655,7 +655,19 @@ Areas that need help:
 
 ## License
 
-MIT — do whatever you want.
+**[Apache License 2.0](LICENSE)** — free to use, modify and redistribute, with
+two protections that MIT doesn't give you:
+
+- **Trademark protection** (Apache-2.0 §6 + [`NOTICE`](NOTICE)): forks and
+  derivatives may not be distributed under the "NEXUS" name or logo.
+- **Patent grant + retaliation**: contributors grant patent rights, and lose
+  them automatically if they sue.
+
+The full strategy — including the optional source-available (BSL 1.1) path for
+newer versions — is in **[docs/LICENSING.md](docs/LICENSING.md)**. There is
+also a runtime [`internal/license`](internal/license/) package that lets future
+builds gate features per edition; today every feature is unlocked and
+`nexus version` says so explicitly.
 
 ---
 

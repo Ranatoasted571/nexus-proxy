@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 NEXUS contributors
+
 package main
 
 import (
@@ -17,6 +20,7 @@ import (
 
 	"github.com/lynuxis2026-pixel/nexus-proxy/internal/config"
 	"github.com/lynuxis2026-pixel/nexus-proxy/internal/dashboard"
+	"github.com/lynuxis2026-pixel/nexus-proxy/internal/license"
 	"github.com/lynuxis2026-pixel/nexus-proxy/internal/providers"
 	"github.com/lynuxis2026-pixel/nexus-proxy/internal/proxy"
 	"github.com/lynuxis2026-pixel/nexus-proxy/internal/storage"
@@ -117,6 +121,8 @@ var versionCmd = &cobra.Command{
 	Short: "Show version",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("nexus %s (built %s)\n", Version, BuildTime)
+		l := license.Active()
+		fmt.Printf("license: %s (%s)\n", l.Notice, l.Edition)
 	},
 }
 

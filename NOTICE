@@ -1,0 +1,32 @@
+NEXUS
+Copyright (c) 2026 NEXUS contributors
+
+This product is licensed under the Apache License, Version 2.0 (the "License").
+You may not use this product except in compliance with the License. A copy of
+the License is included in the LICENSE file in the root of this repository,
+and is also available at:
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Trademark notice
+----------------
+"NEXUS" and the NEXUS logo are unregistered trademarks of the NEXUS project
+maintainers. The Apache-2.0 license grants you broad rights to use, modify and
+redistribute the software, but it does NOT grant you any right to use these
+trademarks. In particular:
+
+  * Forks, ports and derivative works MUST NOT be distributed under the names
+    "NEXUS", "nexus-proxy", or any confusingly similar name or logo without
+    prior written permission from the maintainers.
+  * Hosted or commercial services built on the source MUST NOT be marketed as
+    "NEXUS" or imply official endorsement.
+
+This trademark policy is independent of, and operates alongside, the Apache-2.0
+license — see LICENSE, section 6 ("Trademarks").
+
+Future licensing
+----------------
+See docs/LICENSING.md for the project's licensing strategy, including the
+source-available (BSL 1.1) option that may apply to newer versions in the
+future. The license that applies to a given release is the one bundled with
+that release; this NOTICE describes the current default.

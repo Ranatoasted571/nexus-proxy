@@ -3,6 +3,18 @@
 High-level summary of each release. Full, commit-level notes are on the
 [GitHub releases page](https://github.com/lynuxis2026-pixel/nexus-proxy/releases).
 
+## Unreleased
+
+- **Licensing layer:** moved the project licence from MIT to **Apache-2.0** for
+  trademark + patent-grant protection (forks may use the code but not the
+  "NEXUS" name); added [`NOTICE`](NOTICE), a runtime
+  [`internal/license`](internal/license/) package that's surfaced in
+  `nexus version`, SPDX headers on the package entry points, and a full
+  strategy doc at [`docs/LICENSING.md`](docs/LICENSING.md) — including a
+  ready-to-drop BSL 1.1 template if the project ever wants newer versions to be
+  source-available. Today every feature is unlocked; the seam is in place to
+  gate later without touching call sites.
+
 ## v0.5.0
 
 - **6 more providers (24 → 30):** Baseten, Featherless, kluster.ai, Venice
