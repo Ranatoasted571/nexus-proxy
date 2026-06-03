@@ -5,6 +5,14 @@ High-level summary of each release. Full, commit-level notes are on the
 
 ## Unreleased
 
+- **First-run setup wizard:** open the dashboard after a fresh install and a
+  4-step in-browser onboarding takes over (Welcome → Providers → Test → Connect).
+  Auto-detects providers already in your env vars, recommends a sensible starter
+  set, validates each key with a live `HealthCheck`, and prints a
+  platform-aware (Win / macOS / Linux) copyable `ANTHROPIC_BASE_URL` + key
+  snippet. Saves to `~/.nexus/config.toml`; writes a `setup-done` marker so it
+  never re-appears. Skippable. New endpoints under `/api/setup/*`. Verified
+  end-to-end on the running binary.
 - **Licensing layer:** moved the project licence from MIT to **Apache-2.0** for
   trademark + patent-grant protection (forks may use the code but not the
   "NEXUS" name); added [`NOTICE`](NOTICE), a runtime

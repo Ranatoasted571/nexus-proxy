@@ -16,6 +16,81 @@
 
   const PALETTE = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899', '#84cc16', '#a855f7', '#14b8a6']
 
+  // ── First-run setup wizard ──
+  type Recommended = { name: string; tier: string; note: string }
+  let setupChecked = false
+  let setupOpen = false
+  let setupStep = 0
+  let setupStatus: any = null
+  let setupEntries: { name: string; api_key: string; configured: boolean; tested: 'idle' | 'ok' | 'err' | 'busy'; err?: string }[] = []
+  let setupSaving = false
+  let setupDone = false
+
+  async function loadSetup() {
+    try {
+      const r = await fetch('/api/setup/status')
+      setupStatus = await r.json()
+    } catch { setupStatus = null }
+    if (setupStatus?.first_run) {
+      // Seed the entries: env-discovered first (key already in env, no paste needed),
+      // then the recommended starter set.
+      const seen = new Set<string>()
+      setupEntries = []
+      for (const n of (setupStatus.discoverable || [])) {
+        setupEntries.push({ name: n, api_key: '', configured: true, tested: 'idle' })
+        seen.add(n)
+      }
+      for (const r of (setupStatus.recommended || [])) {
+        if (!seen.has(r.name)) {
+          setupEntries.push({ name: r.name, api_key: '', configured: false, tested: 'idle' })
+          seen.add(r.name)
+        }
+      }
+      setupOpen = true
+    }
+    setupChecked = true
+  }
+  function setupNext() { if (setupStep < 3) setupStep++ }
+  function setupBack() { if (setupStep > 0) setupStep-- }
+  async function setupTestOne(i: number) {
+    const e = setupEntries[i]
+    if (!e.configured && !e.api_key.trim()) { e.tested = 'idle'; setupEntries = setupEntries; return }
+    e.tested = 'busy'; setupEntries = setupEntries
+    try {
+      const r = await fetch('/api/setup/test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: e.name, api_key: e.api_key.trim() }),
+      })
+      const j = await r.json()
+      e.tested = j.ok ? 'ok' : 'err'; e.err = j.error
+    } catch (err) { e.tested = 'err'; e.err = String(err) }
+    setupEntries = setupEntries
+  }
+  async function setupTestAll() {
+    for (let i = 0; i < setupEntries.length; i++) await setupTestOne(i)
+  }
+  async function setupFinish(skip = false) {
+    setupSaving = true
+    const payload = skip
+      ? { skip: true }
+      : { providers: setupEntries.filter(e => e.api_key.trim() || e.configured).map(e => ({ name: e.name, api_key: e.api_key.trim() })) }
+    try {
+      await fetch('/api/setup/save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      setupDone = true
+      setTimeout(() => { setupOpen = false; setupDone = false }, 1200)
+    } catch (e) { console.error('save failed', e) }
+    setupSaving = false
+  }
+  $: connectSnippet = setupStatus?.platform === 'windows'
+    ? `$env:ANTHROPIC_BASE_URL = "http://localhost:${setupStatus?.proxy_port || 3000}"\n$env:ANTHROPIC_API_KEY  = "nexus-local"\nclaude`
+    : `export ANTHROPIC_BASE_URL=http://localhost:${setupStatus?.proxy_port || 3000}\nexport ANTHROPIC_API_KEY=nexus-local\nclaude`
+  $: tierColor = (t: string) => ({ free: '#10b981', standard: '#06b6d4', premium: '#7c3aed' } as any)[t] || '#64748b'
+
+  function copyText(t: string) { navigator.clipboard?.writeText(t) }
+
   // ── Request inspector + replay ──
   let inspecting: any = null
   let inspectLoading = false
@@ -69,6 +144,7 @@
   const tickColor = '#64748b'
 
   onMount(() => {
+    loadSetup()
     fetchInitial()
     connectSSE()
 
@@ -121,6 +197,109 @@
     provChart.update('none')
   }
 </script>
+
+{#if setupOpen}
+  <div class="setup-bg">
+    <div class="setup-card">
+      <div class="setup-head">
+        <div class="setup-logo">NE<span>X</span>US</div>
+        <div class="setup-steps">
+          {#each ['Welcome','Providers','Test','Connect'] as label, i (i)}
+            <span class="dot" class:on={i === setupStep} class:done={i < setupStep}></span>
+          {/each}
+        </div>
+        <button class="skip" on:click={() => setupFinish(true)} disabled={setupSaving}>Skip</button>
+      </div>
+
+      {#if setupDone}
+        <div class="setup-done">✓ Saved. Welcome to NEXUS.</div>
+      {:else if setupStep === 0}
+        <h2>Let's get you set up in 2 minutes</h2>
+        <p class="lead">
+          NEXUS routes Claude Code, Cursor and aider to the cheapest capable model — without your code
+          leaving your machine. Typical user saves <b style="color:#10b981">~$200+/month</b>.
+        </p>
+        <ul class="bullets">
+          <li>🔒 Privacy firewall masks secrets before they leave</li>
+          <li>🪜 Cheap-first cascade verifies cheap answers and only escalates on failure</li>
+          <li>🧠 Adaptive routing learns which provider wins YOUR tasks</li>
+        </ul>
+        <div class="setup-actions">
+          <span></span>
+          <button class="setup-cta" on:click={setupNext}>Let's go →</button>
+        </div>
+      {:else if setupStep === 1}
+        <h2>Pick at least one provider</h2>
+        <p class="lead">
+          {#if setupStatus?.discoverable?.length}
+            We auto-detected <b>{setupStatus.discoverable.length}</b> from your environment variables ✓.
+          {:else}
+            We recommend starting with <b style="color:#10b981">Groq</b> (free) and <b style="color:#06b6d4">DeepSeek</b> ($0.27/M).
+          {/if}
+        </p>
+        <div class="prov-list">
+          {#each setupEntries as e (e.name)}
+            <div class="prov-row">
+              <div class="prov-name">{e.name}</div>
+              {#if e.configured}
+                <div class="prov-env">✓ key from environment</div>
+              {:else}
+                <input type="password" placeholder="paste API key (or leave empty to skip)" bind:value={e.api_key} class="prov-input" />
+              {/if}
+            </div>
+          {/each}
+        </div>
+        <div class="setup-actions">
+          <button class="setup-ghost" on:click={setupBack}>← Back</button>
+          <button class="setup-cta" on:click={setupNext}>Next → Test</button>
+        </div>
+      {:else if setupStep === 2}
+        <h2>Test your providers</h2>
+        <p class="lead">We'll ping each provider's <code class="mono">/models</code> endpoint to verify the key works.</p>
+        <div class="prov-list">
+          {#each setupEntries as e, i (e.name)}
+            {#if e.configured || e.api_key.trim()}
+              <div class="prov-row test">
+                <div class="prov-name">{e.name}</div>
+                <div class="test-status">
+                  {#if e.tested === 'busy'}<span class="muted">testing…</span>
+                  {:else if e.tested === 'ok'}<span class="ok">✓ ok</span>
+                  {:else if e.tested === 'err'}<span class="err" title={e.err}>✗ {e.err?.slice(0,40)}…</span>
+                  {:else}<span class="muted">idle</span>{/if}
+                </div>
+                <button class="setup-ghost small" on:click={() => setupTestOne(i)}>Test</button>
+              </div>
+            {/if}
+          {/each}
+        </div>
+        <div class="setup-actions">
+          <button class="setup-ghost" on:click={setupBack}>← Back</button>
+          <div style="display:flex; gap:8px">
+            <button class="setup-ghost" on:click={setupTestAll}>Test all</button>
+            <button class="setup-cta" on:click={setupNext}>Next →</button>
+          </div>
+        </div>
+      {:else if setupStep === 3}
+        <h2>Connect your coding tool</h2>
+        <p class="lead">Two env vars and you're done. NEXUS speaks both the Anthropic + OpenAI APIs.</p>
+        <div class="codeblock">
+          <pre>{connectSnippet}</pre>
+          <button class="copy-btn" on:click={() => copyText(connectSnippet)}>copy</button>
+        </div>
+        <p class="hint">
+          Already running <code class="mono">nexus start</code>? Restart it once so the proxy picks up your providers.
+          Then run <code class="mono">claude</code> in any project — it'll route through NEXUS automatically.
+        </p>
+        <div class="setup-actions">
+          <button class="setup-ghost" on:click={setupBack}>← Back</button>
+          <button class="setup-cta" on:click={() => setupFinish(false)} disabled={setupSaving}>
+            {setupSaving ? 'Saving…' : 'Finish & open dashboard →'}
+          </button>
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
 
 <header>
   <h1>NE<span>X</span>US</h1>
@@ -382,4 +561,46 @@
   .cx.standard { background: rgba(6,182,212,0.12); color: #06b6d4; }
   .cx.complex { background: rgba(124,58,237,0.14); color: #7c3aed; }
   .cx.critical { background: rgba(239,68,68,0.12); color: #ef4444; }
+
+  /* ── Setup wizard ── */
+  .setup-bg { position: fixed; inset: 0; background: radial-gradient(circle at 30% 20%, rgba(124,58,237,0.10), transparent 60%), #050816; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; overflow-y: auto; }
+  .setup-card { background: #0a0e1a; border: 1px solid #1a2035; border-radius: 14px; width: 100%; max-width: 620px; padding: 28px 32px; box-shadow: 0 30px 80px -20px rgba(124,58,237,0.25); }
+  .setup-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+  .setup-logo { font-family: 'Inter',sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -0.04em; color: #7c3aed; }
+  .setup-logo span { color: #06b6d4; }
+  .setup-steps { display: flex; gap: 8px; }
+  .setup-steps .dot { width: 9px; height: 9px; border-radius: 50%; background: #1a2035; transition: background 0.2s; }
+  .setup-steps .dot.on { background: #7c3aed; box-shadow: 0 0 8px #7c3aed; }
+  .setup-steps .dot.done { background: #10b981; }
+  .skip { background: transparent; color: #64748b; border: 0; cursor: pointer; font-size: 12px; }
+  .skip:hover { color: #e2e8f0; }
+  .setup-card h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: #e2e8f0; margin-bottom: 8px; }
+  .setup-card .lead { color: #94a3b8; font-size: 13px; line-height: 1.55; margin-bottom: 18px; }
+  .setup-card .lead b { color: #e2e8f0; }
+  .bullets { list-style: none; padding: 0; margin: 0 0 22px; display: flex; flex-direction: column; gap: 7px; }
+  .bullets li { color: #cbd5e1; font-size: 13px; padding: 9px 12px; background: #11182f; border: 1px solid #1a2035; border-radius: 7px; }
+  .setup-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 22px; }
+  .setup-cta { background: #7c3aed; color: #fff; border: 0; border-radius: 7px; padding: 9px 18px; font-weight: 700; cursor: pointer; font-size: 13px; }
+  .setup-cta:hover { background: #6d28d9; }
+  .setup-cta:disabled { opacity: 0.5; cursor: default; }
+  .setup-ghost { background: transparent; color: #94a3b8; border: 1px solid #1a2035; border-radius: 7px; padding: 8px 14px; cursor: pointer; font-size: 12px; }
+  .setup-ghost:hover { color: #e2e8f0; border-color: #2a2150; }
+  .setup-ghost.small { padding: 5px 11px; font-size: 11px; }
+  .prov-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 4px; }
+  .prov-row { display: grid; grid-template-columns: 110px 1fr auto; align-items: center; gap: 10px; padding: 9px 12px; background: #11182f; border: 1px solid #1a2035; border-radius: 7px; }
+  .prov-row.test { grid-template-columns: 110px 1fr 60px; }
+  .prov-name { font-weight: 600; color: #06b6d4; font-size: 13px; text-transform: capitalize; }
+  .prov-env { color: #10b981; font-size: 12px; }
+  .prov-input { background: #050816; color: #e2e8f0; border: 1px solid #1a2035; border-radius: 5px; padding: 6px 9px; font-size: 12px; font-family: 'Geist Mono', monospace; }
+  .prov-input:focus { outline: none; border-color: #7c3aed; }
+  .test-status .ok { color: #10b981; font-size: 12px; font-weight: 600; }
+  .test-status .err { color: #ef4444; font-size: 11px; }
+  .test-status .muted { color: #64748b; font-size: 12px; }
+  .codeblock { position: relative; background: #050816; border: 1px solid #1a2035; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+  .codeblock pre { font-family: 'Geist Mono', monospace; font-size: 12px; color: #cbd5e1; white-space: pre-wrap; line-height: 1.6; margin: 0; }
+  .copy-btn { position: absolute; top: 8px; right: 8px; background: #1a2035; color: #94a3b8; border: 0; border-radius: 5px; padding: 4px 9px; font-size: 11px; cursor: pointer; }
+  .copy-btn:hover { background: #2a2150; color: #e2e8f0; }
+  .hint { color: #94a3b8; font-size: 12px; line-height: 1.55; padding: 10px 12px; background: #11182f; border: 1px solid #1a2035; border-radius: 7px; }
+  .hint code { color: #06b6d4; }
+  .setup-done { text-align: center; padding: 60px 0; font-size: 20px; color: #10b981; font-weight: 700; }
 </style>

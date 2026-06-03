@@ -71,6 +71,11 @@ func (s *Server) Routes() http.Handler {
 	api.HandleFunc("/report", s.handleReport).Methods("GET")
 	api.HandleFunc("/savings/card.svg", s.handleSavingsCard).Methods("GET")
 
+	// Setup wizard (first-run experience).
+	api.HandleFunc("/setup/status", s.handleSetupStatus).Methods("GET")
+	api.HandleFunc("/setup/test", s.handleSetupTest).Methods("POST")
+	api.HandleFunc("/setup/save", s.handleSetupSave).Methods("POST")
+
 	// Serve the embedded dashboard UI (Svelte build, or the committed fallback).
 	if sub, err := distFileSystem(); err == nil {
 		r.PathPrefix("/").Handler(http.FileServer(http.FS(sub)))
