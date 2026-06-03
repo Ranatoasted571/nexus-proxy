@@ -1,9 +1,10 @@
 # NEXUS — Project Memory
 
 ## Status
-- **Fase**: Sprint 4 compleet — MVP klaar; build/vet/test groen, cross-compile werkt
-- **Laatste update**: Juni 2026
-- **Sprint**: 4 (polish & release) ✓ — rest: handmatige release-stappen (zie onder)
+- **Fase**: v0.5.0 uitgebracht — 20+ features live, build/vet/test groen op Linux **én Windows**
+- **Laatste update**: 2026-06
+- **Release**: v0.5.0 (30 providers, herschreven classifier, privacy/routing-dashboard, Windows-CI).
+  Eerder: v0.4.1/v0.4.0/v0.3.0. Open: alleen handmatige stappen (zie onder)
 - **Providers**: 30 ingebouwd + generieke "custom" provider (élke OpenAI-compatibele endpoint).
   Built-in: anthropic, openai, xai, deepseek, mistral, cohere, together, fireworks, openrouter,
   deepinfra, perplexity, novita, hyperbolic, nebius, moonshot, zhipu, ai21, lambda, baseten,
@@ -23,12 +24,19 @@
   met geseede demo-DB + screenshot.
 - **Windows-CI**: testjob is nu ubuntu+windows matrix; pad-test voor DB-open met spatie.
 
-## Vóór publicatie (handmatig)
-- [ ] Module-pad `github.com/yourusername/nexus` → echte repo (go.mod + alle imports + `yourusername` in README/.goreleaser.yml/install-scripts)
-- [ ] `git init` + push naar GitHub; tag `v0.1.0` → CI draait GoReleaser
-- [ ] `HOMEBREW_TAP_TOKEN` secret zetten voor de Homebrew-tap
-- [ ] Dashboard-GIF opnemen → `docs/dashboard.gif`, hero in README uncommenten
-- [ ] (Optioneel) domein `get.nexus.sh` of gebruik de raw.githubusercontent install-URL
+## Publicatie-status
+Klaar (done):
+- [x] Module-pad → `github.com/lynuxis2026-pixel/nexus-proxy`; repo public
+- [x] CI (GoReleaser) draait op tags → releases t/m **v0.5.0** met 5 binaries
+- [x] Dashboard-GIF als hero (README + landing); GitHub Pages live
+- [x] `curl|sh` / `irm|iex` install-scripts wijzen naar de raw repo-URL
+
+Alleen nog handmatig (vereist jouw account/UI — ik heb er geen tool voor):
+- [ ] **Social preview** PNG uploaden: repo → Settings → Social preview → `docs/social-preview.png`
+- [ ] **Launch-posts** HN / Reddit / X — teksten staan klaar in `LAUNCH.md`
+- [ ] (optioneel) `HOMEBREW_TAP_TOKEN` secret als je een Homebrew-tap wilt
+- [ ] (optioneel) hero-GIF verversen met de 2 nieuwste kaarten (privacy + routing-mix);
+      huidige GIF is representatief maar van vóór die UI-toevoeging
 
 ---
 
